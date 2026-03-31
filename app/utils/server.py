@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -12,24 +11,21 @@ from langserve import add_routes
 from pydantic import BaseModel
 
 from agents import build_graph, list_presets
+from app.utils.langgraph_loader import load_langgraph_config
 
 
 # ── LangServe용 Input/Output 스키마 ──────────────────────────
-# deepagents 내부 state에 NotRequired + OmitFromSchema 같은
-# 복잡한 어노테이션이 있어서, LangServe의 자동 pydantic 스키마
-# 생성이 실패합니다.
-# LangChain의 AnyMessage 타입을 사용해서 chat playground가
-# 메시지 기반 에이전트를 올바르게 인식하도록 합니다.
+# 모든 preset이 messages 기반 입출력을 사용합니다.
 
 
 class ChatInput(BaseModel):
-    """messages 기반 preset (chat, deep_research)용 입력 스키마."""
+    """messages 기반 입력 스키마."""
 
     messages: list[AnyMessage]
 
 
 class ChatOutput(BaseModel):
-    """messages 기반 preset 출력 스키마."""
+    """messages 기반 출력 스키마."""
 
     messages: list[AnyMessage]
 
@@ -37,56 +33,53 @@ class ChatOutput(BaseModel):
 def create_app() -> FastAPI:
     """Build and return a configured FastAPI application.
 
-    환경변수 LCDAF_PRESET 으로 기본 preset을 지정할 수 있습니다.
-    기본값은 "custom" (LLM 불필요) 입니다.
+    langgraph.json이 있으면 name, version을 읽어
+    /{graph_name} 기반 URI를 구성합니다.
     """
-    application = FastAPI(title="lcdaf-langserve")
+    config = load_langgraph_config()
+
+    service_name = config.name if config else "lcdaf"
+    service_version = config.version if config else "v0"
+    service_description = config.description if config else ""
+
+    application = FastAPI(
+        title=service_name,
+        version=service_version,
+        description=service_description,
+    )
 
     preset = os.getenv("LCDAF_PRESET", "custom")
 
     # ── 그래프 빌드 ───────────────────────────────────────────
     graph = build_graph(preset=preset)  # type: ignore[arg-type]
 
-    # ── add_routes 설정 ───────────────────────────────────────
-    if preset == "chat":
-        # create_agent() → LangServe가 자동으로 스키마 인식 가능
-        add_routes(
-            application,
-            graph,
-            path="/default",
-        )
-    elif preset == "deep_research":
-        # create_deep_agent() → 내부 state에 NotRequired + OmitFromSchema
-        # 어노테이션이 있어서 자동 스키마 생성 시 pydantic 에러 발생.
-        # input/output_type을 명시해서 우회하되, chat playground는
-        # 커스텀 스키마를 인식 못하므로 default playground 사용.
-        add_routes(
-            application,
-            graph,
-            path="/default",
-            input_type=ChatInput,
-            output_type=ChatOutput,
-        )
-    else:
-        add_routes(
-            application,
-            graph,
-            path="/default",
-        )
+    # ── URI 경로 구성 ─────────────────────────────────────────
+    graph_name = config.graphs[0].name if config and config.graphs else "default"
+    base_path = f"/{graph_name}"
+
+    # ── add_routes ────────────────────────────────────────────
+    add_routes(
+        application,
+        graph,
+        path=base_path,
+        input_type=ChatInput,
+        output_type=ChatOutput,
+    )
 
     # ── 엔드포인트 ────────────────────────────────────────────
     @application.get("/")
     def root() -> RedirectResponse:
-        return RedirectResponse(url="/default/playground/")
+        return RedirectResponse(url=f"{base_path}/playground/")
 
     @application.get("/health")
     def health() -> dict:
         return {
-            "name": "lcdaf-langserve",
+            "name": service_name,
+            "version": service_version,
             "status": "ok",
             "preset": preset,
-            "graph": "/default",
-            "playground": "/default/playground/",
+            "graph": base_path,
+            "playground": f"{base_path}/playground/",
             "docs": "/docs",
         }
 

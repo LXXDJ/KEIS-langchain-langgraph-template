@@ -1,0 +1,13 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./src/graph.py:graph"
+  },
+  "type": "service",
+  "name": "langchain-deep-agent-template",
+  "version": "v260331",
+  "description": "구매 업무 정보 검색 서비스 서비스 입니다.",
+  "maintainers": [
+    {"name":  "NoName", "email": "example@atdev.co.kr"}
+  ]
+}

@@ -33,12 +33,11 @@ LangGraph 위에 built-in 기능을 얹은 상위 레이어입니다.
 - memory / skills / human-in-the-loop 확장
 - `create_deep_agent()` — 리서치 에이전트의 표준 팩토리
 
-### 서빙: LangServe 또는 직접 FastAPI
+### 서빙: LangServe
 
 에이전트를 HTTP API로 노출하는 계층입니다.
 
-- **LangServe**: `add_routes()`로 자동 엔드포인트 + Playground UI
-- **Raw FastAPI**: `/invoke`, `/stream`(SSE), `/info` 직접 구성. 이벤트 세밀 제어가 필요할 때
+- `add_routes()`로 자동 엔드포인트 + Playground UI 구성
 
 ---
 
@@ -63,7 +62,7 @@ START → preprocess → worker → postprocessor → END
 
 - **State 분리**: `InputState` / `InternalState` / `OutputState` / `Context`
 - **노드 안에서 create_agent()**: worker 노드에서 LLM 에이전트를 서브에이전트로 호출
-- **이벤트 기반 스트리밍**: `astream_events`로 중간 과정을 SSE로 전달
+- **스트리밍**: LangServe의 내장 스트리밍으로 중간 과정 전달
 
 ---
 
@@ -109,10 +108,9 @@ agents/
     └── postprocessor.py  # 후처리
 
 app/
-├── run.py                # 서버 진입점 (LCDAF_SERVING으로 모드 선택)
+├── run.py                # 서버 진입점
 └── utils/
-    ├── server.py         # LangServe 기반 서빙
-    └── server_raw.py     # 직접 FastAPI 구성
+    └── server.py         # LangServe 기반 서빙
 ```
 
 ---
@@ -121,6 +119,6 @@ app/
 
 1. **graph가 개발/실행/배포의 기본 단위**
 2. **middleware는 운영 정책** — 요약, tool 호출 제한, fallback, human approval 등
-3. **serving은 구현과 분리** — 같은 graph를 LangServe 또는 Raw FastAPI로 서빙
+3. **serving은 구현과 분리** — 같은 graph를 LangServe로 서빙
 4. **생태계 내장 기능 우선** — 직접 구현보다 LangChain/LangGraph/Deep Agents의 내장 함수 활용
 5. **State 분리로 명확한 경계** — 입력/내부/출력/컨텍스트를 분리하여 유지보수성 확보

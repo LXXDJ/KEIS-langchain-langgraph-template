@@ -15,6 +15,14 @@ HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 RELOAD="${RELOAD:-true}"
 
+# ── uv 확인 ─────────────────────────────────────────────────
+if ! command -v uv &>/dev/null; then
+    echo "Error: uv가 설치되어 있지 않습니다."
+    echo "  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "  또는 https://docs.astral.sh/uv/getting-started/installation/ 참고"
+    exit 1
+fi
+
 # ── .env 로드 (있을 경우) ─────────────────────────────────────
 if [ -f "$PROJECT_ROOT/.env" ]; then
     echo "Loading .env ..."
@@ -24,28 +32,11 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     set +a
 fi
 
-# ── Python 버전 확인 ──────────────────────────────────────────
-PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
-MAJOR=$(echo "$PYTHON_VERSION" | cut -d. -f1)
-MINOR=$(echo "$PYTHON_VERSION" | cut -d. -f2)
-
-if [ "$MAJOR" -lt 3 ] || { [ "$MAJOR" -eq 3 ] && [ "$MINOR" -lt 12 ]; }; then
-    echo "Error: Python >= 3.12 required (found $PYTHON_VERSION)"
-    exit 1
-fi
-
-# ── 의존성 설치 확인 ──────────────────────────────────────────
-if ! python3 -c "import langgraph" 2>/dev/null; then
-    echo "Dependencies not found. Installing ..."
-    pip install -e "$PROJECT_ROOT"
-fi
-
 # ── 서버 실행 ─────────────────────────────────────────────────
 echo ""
 echo "  lcdaf LangServe"
 echo "  http://${HOST}:${PORT}"
-echo "  playground: http://${HOST}:${PORT}/default/playground/"
-echo "  docs:       http://${HOST}:${PORT}/docs"
+echo "  docs: http://${HOST}:${PORT}/docs"
 echo ""
 
 cd "$PROJECT_ROOT"
@@ -55,7 +46,7 @@ if [ "$RELOAD" = "true" ]; then
     RELOAD_FLAG="--reload"
 fi
 
-exec python3 -m uvicorn app.run:app \
+exec uv run uvicorn app.run:app \
     --host "$HOST" \
     --port "$PORT" \
     $RELOAD_FLAG

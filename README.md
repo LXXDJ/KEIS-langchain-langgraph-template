@@ -25,10 +25,9 @@ lcdaf/
 │     ├─ critic.py          # 출력 검증 (레거시)
 │     └─ finalize_output.py # 출력 정제 (레거시)
 ├─ app/
-│  ├─ run.py                # 서버 진입점 (langserve / raw 모드 선택)
+│  ├─ run.py                # 서버 진입점
 │  └─ utils/
 │     ├─ server.py          # LangServe 기반 서빙
-│     ├─ server_raw.py      # 직접 FastAPI 구성 (/invoke, /stream, /info)
 │     ├─ langgraph_loader.py
 │     └─ schema.py
 ├─ examples/
@@ -95,14 +94,13 @@ from agents.state import State, InputState, OutputState, Context
 
 API 문서화용 Pydantic 스키마(`InputStateSchema`, `OutputStateSchema`)도 함께 제공합니다.
 
-## 서빙 모드
+## 서빙
 
-환경변수 `LCDAF_SERVING`으로 선택합니다:
+LangServe 기반으로 서빙합니다. `add_routes()`가 자동으로 엔드포인트와 Playground UI를 구성합니다.
 
-| 모드 | 엔드포인트 | 용도 |
-|------|-----------|------|
-| `langserve` (기본) | `/default/invoke`, `/default/stream`, `/default/playground/` | 개발/테스트. Playground UI 포함 |
-| `raw` | `/invoke`, `/stream`, `/info` | 프로덕션. SSE 이벤트 세밀 제어, 커스텀 헤더 처리 |
+- `/default/invoke` — 동기식 실행
+- `/default/stream` — 스트리밍
+- `/default/playground/` — Playground UI
 
 ## 노드 안에서 create_agent() 사용
 

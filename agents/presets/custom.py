@@ -9,38 +9,15 @@ State 분리 패턴(InputState / InternalState / OutputState / Context)과
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agents.nodes.postprocessor import postprocessor
-from agents.nodes.preprocess import preprocess_input
+from agents.nodes.preprocess import preprocess
 from agents.nodes.worker import worker_sync
-from agents.state import Context, InputState, InternalState, OutputState, State
-
-
-# ── 노드 함수 (state 어댑터) ─────────────────────────────────
-
-
-def _preprocess_node(state: State) -> Dict[str, Any]:
-    """입력 전처리 — query 정규화."""
-    query = state.get("query", "")
-    return {"query": preprocess_input(query)}
-
-
-def _worker_node(state: State) -> Dict[str, Any]:
-    """Worker — 기본은 동기 버전 (LLM 없이 테스트용).
-
-    실제 서비스에서는 이 함수를 agents.nodes.worker.worker(비동기)로
-    교체하여 create_agent() 서브 에이전트를 사용합니다.
-    """
-    return worker_sync(state)
-
-
-def _postprocessor_node(state: State) -> Dict[str, Any]:
-    """후처리 — worker 결과를 최종 출력으로 변환."""
-    return postprocessor(state)
+from agents.state import Context, InputState, OutputState, State
 
 
 # ── 그래프 빌더 ───────────────────────────────────────────────
@@ -73,15 +50,15 @@ def build_custom(
         context_schema=Context,
     )
 
-    builder.add_node("preprocess", _preprocess_node)
-    builder.add_node("postprocessor", _postprocessor_node)
+    builder.add_node("preprocess", preprocess)
+    builder.add_node("postprocessor", postprocessor)
 
     if use_async_worker:
         from agents.nodes.worker import worker
 
         builder.add_node("worker", worker)
     else:
-        builder.add_node("worker", _worker_node)
+        builder.add_node("worker", worker_sync)
 
     builder.add_edge(START, "preprocess")
     builder.add_edge("preprocess", "worker")

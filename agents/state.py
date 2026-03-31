@@ -1,7 +1,6 @@
-"""State 정의 — InputState / InternalState / OutputState / Context 분리 패턴.
+"""State 정의 — messages 기반 통합 인터페이스.
 
-LangGraph StateGraph에서 사용하는 런타임 TypedDict와,
-API 문서화용 Pydantic 스키마를 함께 정의합니다.
+모든 preset(chat, deep_research, custom)이 동일한 messages 입출력을 사용합니다.
 
 Usage:
     graph_builder = StateGraph(
@@ -17,6 +16,8 @@ from __future__ import annotations
 from operator import add
 from typing import Any, Dict, List, Literal, Optional
 
+from langchain_core.messages import AnyMessage
+from langgraph.graph import add_messages
 from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict
 
@@ -29,9 +30,7 @@ from typing_extensions import Annotated, TypedDict
 class InputState(TypedDict, total=False):
     """그래프 외부에서 들어오는 입력 필드."""
 
-    query: str
-    system_prompt: Optional[str]
-    llm_configs: Optional[Dict[str, Any]]
+    messages: Annotated[list[AnyMessage], add_messages]
 
 
 class InternalState(TypedDict, total=False):
@@ -47,8 +46,7 @@ class InternalState(TypedDict, total=False):
 class OutputState(TypedDict, total=False):
     """그래프 최종 출력 필드."""
 
-    status: Literal["success", "error"]
-    data: Dict[str, Any]
+    messages: Annotated[list[AnyMessage], add_messages]
 
 
 class State(InputState, InternalState, OutputState, total=False):
@@ -77,43 +75,15 @@ class Context(TypedDict, total=False):
 class InputStateSchema(BaseModel):
     """입력 스키마 — API 문서화 및 /info 엔드포인트에 사용."""
 
-    query: str = Field(
-        description="사용자 질의",
-        examples=["최근 매출 데이터를 알려주세요."],
-    )
-
-    system_prompt: Optional[str] = Field(
-        default=None,
-        description="시스템 프롬프트 오버라이드",
-    )
-
-    llm_configs: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="LLM 사용 지점별 개별 설정 (예: {'worker': {'model_name': 'gpt-4o'}})",
-    )
-
-
-class OutputDataSchema(BaseModel):
-    """출력 데이터 상세 스키마."""
-
-    output: Optional[List[Dict]] = Field(
-        default=None,
-        description="처리 결과 데이터",
-    )
-
-    message: Optional[str] = Field(
-        default=None,
-        description="에러 메시지 또는 비고",
+    messages: list[dict] = Field(
+        description="메시지 목록",
+        examples=[[{"type": "human", "content": "최근 매출 데이터를 알려주세요."}]],
     )
 
 
 class OutputStateSchema(BaseModel):
     """출력 스키마 — API 문서화용."""
 
-    status: Literal["success", "error"] = Field(
-        description="실행 상태",
-    )
-
-    data: OutputDataSchema = Field(
-        description="실행 결과 데이터",
+    messages: list[dict] = Field(
+        description="응답 메시지 목록",
     )
