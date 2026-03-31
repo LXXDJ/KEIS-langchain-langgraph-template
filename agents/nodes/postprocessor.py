@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage
 from agents.state import State
 
 
-def postprocessor(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def postprocessor(state: State, **kwargs: Any) -> Dict[str, Any]:
     """_worker_outputs에서 응답을 추출하여 AIMessage로 반환합니다."""
     worker_outputs = state.get("_worker_outputs", [])
 

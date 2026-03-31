@@ -13,6 +13,9 @@ from pydantic import BaseModel
 from agents import build_graph, list_presets
 from app.utils.langgraph_loader import load_langgraph_config
 
+# ── 상수 ─────────────────────────────────────────────────────
+
+_PRESET_DEEP_RESEARCH = "deep_research"
 
 # ── LangServe용 Input/Output 스키마 ──────────────────────────
 # 모든 preset이 messages 기반 입출력을 사용합니다.
@@ -58,13 +61,16 @@ def create_app() -> FastAPI:
     base_path = f"/{graph_name}"
 
     # ── add_routes ────────────────────────────────────────────
-    add_routes(
-        application,
-        graph,
-        path=base_path,
-        input_type=ChatInput,
-        output_type=ChatOutput,
-    )
+    # deep_research: create_deep_agent() 내부 state에
+    # NotRequired + OmitFromSchema 어노테이션이 있어서
+    # LangServe 자동 스키마 생성이 실패함 → input_type/output_type 명시
+    if preset == _PRESET_DEEP_RESEARCH:
+        add_routes(
+            application, graph, path=base_path,
+            input_type=ChatInput, output_type=ChatOutput,
+        )
+    else:
+        add_routes(application, graph, path=base_path)
 
     # ── 엔드포인트 ────────────────────────────────────────────
     @application.get("/")

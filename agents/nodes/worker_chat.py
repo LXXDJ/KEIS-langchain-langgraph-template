@@ -4,11 +4,9 @@ create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용�
 커스텀 도구(@tool)를 붙여서 DB 조회, API 호출 등을 수행할 수 있습니다.
 
 사용법:
-    custom.py의 build_custom()에서 worker 노드를 이 함수로 교체합니다.
+    custom.py의 build_custom()에서 worker_type="chat"을 지정합니다.
 
-    # agents/presets/custom.py
-    from agents.nodes.worker_chat import worker_chat
-    builder.add_node("worker", worker_chat)
+    build_custom(worker_type="chat")
 """
 
 from __future__ import annotations
