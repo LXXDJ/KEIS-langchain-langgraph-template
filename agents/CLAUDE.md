@@ -23,7 +23,7 @@ agents/
 1. `agents/nodes/` 에 파일 생성 (snake_case)
 2. async 함수로 작성:
    ```python
-   async def my_node(state: State, **kwargs: Any) -> Dict[str, Any]:
+   async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
    ```
 3. `agents/nodes/__init__.py` 에 export 추가
 4. 필요 시 preset에서 참조

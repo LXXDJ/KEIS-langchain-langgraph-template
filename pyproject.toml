@@ -41,7 +41,6 @@ select = [
     "UP",   # pyupgrade (PEP 604 등 최신 문법 강제)
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
-    "TCH",  # flake8-type-checking
 ]
 ignore = [
     "E501",  # line-length는 formatter가 처리

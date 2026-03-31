@@ -57,7 +57,7 @@ examples/            # preset별 사용 예시
 ### Python 스타일
 
 - Python 3.12+ 기준
-- `from __future__ import annotations` 를 모든 .py 파일 첫 줄에 추가
+- `from __future__ import annotations` 를 모든 .py 파일에 추가 (독스트링이 있으면 독스트링 바로 다음)
 - 타입 힌트 필수: PEP 604 스타일 (`str | None`, not `Optional[str]`), 소문자 제네릭 (`list[T]`, `dict[K, V]`)
 - 독스트링: 한국어로 작성, 모듈·클래스·공개 함수에 필수
 - 식별자(변수명, 함수명, 클래스명): 영어만 사용
@@ -80,14 +80,14 @@ from agents.state import State               # 4. 로컬
 ### 노드 함수 작성 규칙
 
 ```python
-async def my_node(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
     """노드 설명 (한국어)."""
     # 구현
     return {"필드명": 값}
 ```
 
 - 반드시 `async def`
-- 시그니처: `(state: State, **kwargs: Any) -> Dict[str, Any]`
+- 시그니처: `(state: State, **kwargs: Any) -> dict[str, Any]`
 - State 필드 접근 시 `.get()` 사용 (KeyError 방지): `state.get("messages", [])`
 - 반환값은 State 필드명을 키로 하는 dict
 
