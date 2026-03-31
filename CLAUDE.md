@@ -18,23 +18,30 @@ cp .env.example .env   # AGENT_PRESET, OPENAI_API_KEY 설정
 ## 폴더 구조 규칙
 
 ```
-agents/          # 에이전트 구현 (그래프, 노드, 상태, 프리셋)
-  ├─ presets/    # 그래프 빌더 함수 (build_custom, build_chat, build_deep_research)
-  ├─ nodes/      # 개별 노드 함수 (async only)
-  ├─ state.py    # State 정의 (이 파일 하나에서만 관리)
-  └─ registry.py # preset 메타 정보
-app/             # 서빙 레이어 (FastAPI + LangServe)
-  └─ utils/      # 서버 팩토리, langgraph.json 로더, 스키마
-docs/ko/         # 한국어 문서
-scripts/         # 실행 스크립트
-examples/        # preset별 사용 예시
+agents/              # 에이전트 구현 (그래프, 노드, 상태, 프리셋)
+  ├─ presets/        # 그래프 빌더 함수 (build_custom, build_chat, build_deep_research)
+  ├─ nodes/          # 개별 노드 함수 (async only)
+  ├─ tools/          # 범용 도구 (@tool). worker 전용 도구는 해당 worker 파일 안에 정의
+  ├─ skills/         # Deep Agents 스킬 (재사용 가능한 능력 단위)
+  ├─ backends/       # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
+  ├─ middlewares/    # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
+  ├─ state.py        # State 정의 (이 파일 하나에서만 관리)
+  └─ registry.py     # preset 메타 정보
+app/                 # 서빙 레이어 (FastAPI + LangServe)
+  └─ utils/          # 서버 팩토리, langgraph.json 로더, 스키마
+docs/ko/             # 한국어 문서
+scripts/             # 실행 스크립트
+examples/            # preset별 사용 예시
 ```
 
 ### 새 파일 위치 규칙
 
 - 새 노드 → `agents/nodes/` 에 추가하고 `agents/nodes/__init__.py`에 export
 - 새 preset → `agents/presets/` 에 추가하고 `agents/presets/__init__.py`에 export, `agents/registry.py`에 메타 등록
-- 새 도구(@tool) → 해당 worker 파일 안에 정의. 범용 도구는 `agents/tools/` 폴더 생성 가능
+- 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `agents/tools/`
+- 새 스킬 → `agents/skills/` 에 추가하고 `__init__.py`에 export
+- 새 백엔드 → `agents/backends/` 에 추가하고 `__init__.py`에 export
+- 새 미들웨어 → `agents/middlewares/` 에 추가하고 `__init__.py`에 export
 - 서빙 관련 유틸 → `app/utils/`
 - 문서 → `docs/ko/`
 

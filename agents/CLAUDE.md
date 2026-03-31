@@ -11,7 +11,11 @@ agents/
 ├─ state.py           # State 정의 — 이 파일에서만 TypedDict 관리
 ├─ registry.py        # preset 메타 정보 (PresetInfo)
 ├─ presets/           # 그래프 빌더 함수
-└─ nodes/             # 개별 노드 함수
+├─ nodes/             # 개별 노드 함수 (async only)
+├─ tools/             # 범용 도구 (@tool)
+├─ skills/            # Deep Agents 스킬
+├─ backends/          # 백엔드 구현 (파일시스템, 스토리지, 메모리)
+└─ middlewares/       # 커스텀 미들웨어 (운영 정책)
 ```
 
 ## 노드 추가 절차
@@ -47,3 +51,28 @@ agents/
 2. `agents/nodes/__init__.py` 에 export
 3. `agents/presets/custom.py` 의 `_WORKER_MAP`에 등록
 4. `WorkerType` Literal에 키 추가
+
+## 도구(@tool) 추가 규칙
+
+- 특정 worker 전용 도구 → 해당 `worker_*.py` 파일 안에 `@tool` 정의
+- 여러 worker에서 공유하는 범용 도구 → `agents/tools/` 에 파일 생성, `__init__.py`에 export
+- 파일명: `{도구_카테고리}.py` (예: `agents/tools/search.py`, `agents/tools/database.py`)
+
+## 스킬 추가 규칙
+
+- `agents/skills/` 에 파일 생성
+- `create_deep_agent(skills=[...])` 파라미터에 전달할 수 있는 형태로 구현
+- `__init__.py`에 export
+
+## 백엔드 추가 규칙
+
+- `agents/backends/` 에 파일 생성
+- 파일시스템, 벡터 스토어, 메모리 등 에이전트가 의존하는 인프라 구현
+- `__init__.py`에 export
+
+## 미들웨어 추가 규칙
+
+- `agents/middlewares/` 에 파일 생성
+- `create_agent(middleware=[...])`, `create_deep_agent(middleware=[...])` 에 전달할 수 있는 형태로 구현
+- 운영 정책 단위로 분리 (예: `summarization.py`, `fallback.py`, `logging.py`)
+- `__init__.py`에 export
