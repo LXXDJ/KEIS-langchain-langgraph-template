@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ── run-docker.sh ────────────────────────────────────────────
-# Docker로 lcdaf 컨테이너를 빌드하고 실행합니다.
+# Docker로 agent-template 컨테이너를 빌드하고 실행합니다.
 #
 # 사용법:
 #   ./scripts/run-docker.sh                  # 빌드 + 실행
@@ -13,8 +13,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-IMAGE_NAME="${IMAGE_NAME:-lcdaf}"
-CONTAINER_NAME="${CONTAINER_NAME:-lcdaf-server}"
+IMAGE_NAME="${IMAGE_NAME:-agent-template}"
+CONTAINER_NAME="${CONTAINER_NAME:-agent-template-server}"
 PORT="${PORT:-8000}"
 
 DO_BUILD=true
@@ -28,8 +28,8 @@ for arg in "$@"; do
             echo "Usage: $0 [--build-only | --run-only]"
             echo ""
             echo "Environment variables:"
-            echo "  IMAGE_NAME      Docker image name   (default: lcdaf)"
-            echo "  CONTAINER_NAME  Container name      (default: lcdaf-server)"
+            echo "  IMAGE_NAME      Docker image name   (default: agent-template)"
+            echo "  CONTAINER_NAME  Container name      (default: agent-template-server)"
             echo "  PORT            Host port           (default: 8000)"
             exit 0
             ;;

@@ -13,7 +13,7 @@ def build_chat(
     tools: Sequence[Any] | None = None,
     system_prompt: str | None = None,
     middleware: Sequence[Any] = (),
-    name: str | None = "lcdaf_chat",
+    name: str | None = "chat",
     **kwargs: Any,
 ) -> CompiledStateGraph:
     """langchain.agents.create_agent() 래퍼.

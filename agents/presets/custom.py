@@ -75,4 +75,4 @@ def build_custom(
     builder.add_edge("worker", "postprocessor")
     builder.add_edge("postprocessor", END)
 
-    return builder.compile(name="lcdaf_custom_graph")
+    return builder.compile(name="custom")

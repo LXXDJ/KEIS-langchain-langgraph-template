@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 packages = ["agents", "app"]
 
 [project]
-name = "lcdaf"
+name = "langchain-deep-agent-template"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
