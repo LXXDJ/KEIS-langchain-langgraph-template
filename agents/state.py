@@ -14,11 +14,10 @@ Usage:
 from __future__ import annotations
 
 from operator import add
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
-from typing_extensions import TypedDict
 
 # ══════════════════════════════════════════════════════════════
 # Part 1: Runtime TypedDict (실제 그래프 실행)
