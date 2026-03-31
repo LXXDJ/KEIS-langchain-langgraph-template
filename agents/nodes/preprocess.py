@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from langchain_core.messages import HumanMessage
 
 from agents.state import State
 
 
-async def preprocess(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def preprocess(state: State, **kwargs: Any) -> dict[str, Any]:
     """입력 messages의 마지막 HumanMessage를 정규화합니다.
 
     현재는 strip만 수행합니다.

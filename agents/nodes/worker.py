@@ -8,14 +8,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
-from langchain_core.messages import AIMessage, HumanMessage
+from typing import Any
 
 from agents.state import State
 
 
-async def worker(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def worker(state: State, **kwargs: Any) -> dict[str, Any]:
     """기본 worker 노드 (LLM 없이 테스트용).
 
     실제 LLM 호출 없이 custom preset의 기본 동작을 확인할 때 사용합니다.

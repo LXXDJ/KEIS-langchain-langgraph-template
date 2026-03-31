@@ -14,12 +14,10 @@ Usage:
 from __future__ import annotations
 
 from operator import add
-from typing import Any, Dict, List
+from typing import Annotated, Any, TypedDict
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
-from typing_extensions import Annotated, TypedDict
-
 
 # ══════════════════════════════════════════════════════════════
 # Part 1: Runtime TypedDict (실제 그래프 실행)
@@ -39,7 +37,7 @@ class InternalState(TypedDict, total=False):
     Annotated[..., add]를 사용하면 여러 노드의 출력이 자동 병합됩니다.
     """
 
-    _worker_outputs: Annotated[List[Dict[str, Any]], add]
+    _worker_outputs: Annotated[list[dict[str, Any]], add]
 
 
 class OutputState(TypedDict, total=False):

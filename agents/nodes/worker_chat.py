@@ -11,13 +11,12 @@ create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용�
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from langchain.agents import create_agent
 from langchain.tools import tool
 
 from agents.state import State
-
 
 # ── 커스텀 도구 정의 ──────────────────────────────────────────
 
@@ -40,7 +39,7 @@ def search_database(query: str) -> str:
 # ── Worker 노드 ──────────────────────────────────────────────
 
 
-async def worker_chat(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def worker_chat(state: State, **kwargs: Any) -> dict[str, Any]:
     """create_agent() 기반 worker 노드.
 
     특징:
@@ -62,7 +61,10 @@ async def worker_chat(state: State, **kwargs: Any) -> Dict[str, Any]:
 
     result = await agent.ainvoke({"messages": messages})
 
-    ai_message = result["messages"][-1]
+    result_messages = result.get("messages", [])
+    if not result_messages:
+        raise ValueError("에이전트가 빈 messages를 반환했습니다.")
+    ai_message = result_messages[-1]
     response_text = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
 
     return {
