@@ -58,13 +58,16 @@ def create_app() -> FastAPI:
     base_path = f"/{graph_name}"
 
     # ── add_routes ────────────────────────────────────────────
-    add_routes(
-        application,
-        graph,
-        path=base_path,
-        input_type=ChatInput,
-        output_type=ChatOutput,
-    )
+    # deep_research: create_deep_agent() 내부 state에
+    # NotRequired + OmitFromSchema 어노테이션이 있어서
+    # LangServe 자동 스키마 생성이 실패함 → input_type/output_type 명시
+    if preset == "deep_research":
+        add_routes(
+            application, graph, path=base_path,
+            input_type=ChatInput, output_type=ChatOutput,
+        )
+    else:
+        add_routes(application, graph, path=base_path)
 
     # ── 엔드포인트 ────────────────────────────────────────────
     @application.get("/")

@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage
 from agents.state import State
 
 
-def preprocess(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def preprocess(state: State, **kwargs: Any) -> Dict[str, Any]:
     """입력 messages의 마지막 HumanMessage를 정규화합니다.
 
     현재는 strip만 수행합니다.

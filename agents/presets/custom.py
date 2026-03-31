@@ -14,25 +14,18 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from agents.nodes import worker_chat, worker_deep
 from agents.nodes.postprocessor import postprocessor
 from agents.nodes.preprocess import preprocess
-from agents.nodes.worker import worker_sync
+from agents.nodes.worker import worker
 from agents.state import Context, InputState, OutputState, State
 
 
 # ── 그래프 빌더 ───────────────────────────────────────────────
 
 
-def build_custom(
-    *,
-    use_async_worker: bool = False,
-    **_kwargs: Any,
-) -> CompiledStateGraph:
+def build_custom(**_kwargs: Any) -> CompiledStateGraph:
     """수동 StateGraph 노드 조합으로 그래프를 빌드합니다.
-
-    Args:
-        use_async_worker: True면 create_agent() 기반 비동기 worker 사용.
-                          False(기본)면 LLM 없이 동기 worker 사용.
 
     그래프 구조:
         START → preprocess → worker → postprocessor → END
@@ -51,14 +44,12 @@ def build_custom(
     )
 
     builder.add_node("preprocess", preprocess)
+
+    # builder.add_node("worker", worker) # 기본 NODE
+    # builder.add_node("worker", worker_chat) # create_agent 활용 NODE
+    builder.add_node("worker", worker_deep) # create_deep_agent 활용 NODE
+
     builder.add_node("postprocessor", postprocessor)
-
-    if use_async_worker:
-        from agents.nodes.worker import worker
-
-        builder.add_node("worker", worker)
-    else:
-        builder.add_node("worker", worker_sync)
 
     builder.add_edge(START, "preprocess")
     builder.add_edge("preprocess", "worker")
