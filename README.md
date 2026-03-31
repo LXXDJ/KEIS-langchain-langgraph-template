@@ -11,7 +11,7 @@ lcdaf/
 ├─ agents/
 │  ├─ __init__.py           # 공개 API
 │  ├─ graph_builder.py      # build_graph(preset=...) 통합 진입점
-│  ├─ state.py              # State 정의 (Input/Internal/Output/Context)
+│  ├─ state.py              # State 정의 (messages 기반 Input/Internal/Output/Context)
 │  ├─ registry.py           # preset 메타 정보
 │  ├─ presets/
 │  │  ├─ chat.py            # create_agent() 기반
@@ -20,21 +20,19 @@ lcdaf/
 │  └─ nodes/
 │     ├─ preprocess.py      # 입력 전처리
 │     ├─ worker.py          # 서브 에이전트 (create_agent) 패턴
-│     ├─ postprocessor.py   # 후처리
-│     ├─ planner.py         # 계획 수립 (레거시)
-│     ├─ critic.py          # 출력 검증 (레거시)
-│     └─ finalize_output.py # 출력 정제 (레거시)
+│     └─ postprocessor.py   # 후처리
 ├─ app/
 │  ├─ run.py                # 서버 진입점
 │  └─ utils/
 │     ├─ server.py          # LangServe 기반 서빙
-│     ├─ langgraph_loader.py
-│     └─ schema.py
+│     ├─ langgraph_loader.py # langgraph.json 파싱
+│     └─ schema.py          # langgraph.json용 dataclass
 ├─ examples/
 ├─ docs/ko/
 ├─ scripts/
 │  ├─ run-local.sh
 │  └─ run-docker.sh
+├─ langgraph.json           # 서비스 설정 (name, version, graphs 등)
 ├─ pyproject.toml
 ├─ Dockerfile
 └─ .env.example
@@ -47,7 +45,7 @@ lcdaf/
 cp .env.example .env
 # .env 파일에서 LCDAF_PRESET, OPENAI_API_KEY 등 설정
 
-# 2. 로컬 실행
+# 2. 로컬 실행 (uv 필요)
 ./scripts/run-local.sh
 
 # 3. Docker 실행
@@ -56,7 +54,7 @@ cp .env.example .env
 
 ## Preset
 
-`build_graph(preset=...)`로 에이전트 유형을 선택합니다. 모든 preset은 `CompiledStateGraph`를 반환합니다.
+`build_graph(preset=...)`로 에이전트 유형을 선택합니다. 모든 preset은 `CompiledStateGraph`를 반환하며, 동일한 messages 기반 입출력을 사용합니다.
 
 | preset | 팩토리 | 설명 |
 |--------|--------|------|
@@ -66,10 +64,11 @@ cp .env.example .env
 
 ```python
 from agents import build_graph
+from langchain_core.messages import HumanMessage
 
 # LLM 없이 테스트
 graph = build_graph()
-result = graph.invoke({"query": "hello"})
+result = graph.invoke({"messages": [HumanMessage(content="hello")]})
 
 # LangChain 대화형 에이전트
 graph = build_graph("chat", model="openai:gpt-4o")
@@ -85,9 +84,9 @@ custom preset은 실제 서비스에서 사용하는 State 분리 패턴을 적�
 ```python
 from agents.state import State, InputState, OutputState, Context
 
-# InputState  : 외부 입력 (query, system_prompt, llm_configs)
+# InputState  : 외부 입력 (messages)
 # InternalState: 내부 처리 (_worker_outputs 등, 외부 비노출)
-# OutputState : 최종 출력 (status, data)
+# OutputState : 최종 출력 (messages)
 # Context     : 런타임 설정 (state에 포함되지 않음)
 # State       : Input + Internal + Output 합집합
 ```
@@ -96,11 +95,19 @@ API 문서화용 Pydantic 스키마(`InputStateSchema`, `OutputStateSchema`)도 
 
 ## 서빙
 
-LangServe 기반으로 서빙합니다. `add_routes()`가 자동으로 엔드포인트와 Playground UI를 구성합니다.
+LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 설정에 따라 URI 경로가 결정됩니다.
 
-- `/default/invoke` — 동기식 실행
-- `/default/stream` — 스트리밍
-- `/default/playground/` — Playground UI
+- `/{graph_name}/invoke` — 동기식 실행
+- `/{graph_name}/stream` — 스트리밍
+- `/{graph_name}/playground/` — Playground UI
+
+```json
+// langgraph.json 예시
+{
+  "graphs": { "agent": "./src/graph.py:graph" }
+}
+// → /agent/invoke, /agent/playground/ 등
+```
 
 ## 노드 안에서 create_agent() 사용
 
@@ -108,7 +115,6 @@ LangServe 기반으로 서빙합니다. `add_routes()`가 자동으로 엔드포
 
 ```python
 from langchain.agents import create_agent
-from langchain.messages import HumanMessage
 
 async def worker(state, **kwargs):
     agent = create_agent(
@@ -116,7 +122,7 @@ async def worker(state, **kwargs):
         tools=[my_tool],
         system_prompt="...",
     )
-    result = await agent.ainvoke({"messages": [HumanMessage(content=state["query"])]})
+    result = await agent.ainvoke({"messages": state["messages"]})
     return {"_worker_outputs": [{"status": "success", "data": {...}}]}
 ```
 

@@ -35,9 +35,8 @@ class LanggraphJson:
           "dependencies": ["."],
           "graphs": {"agent": "./src/graph.py:graph"},
           "type": "service",
-          "name": "langchain-deep-agent-template",
+          "name": "langchain-langgraph-template",
           "version": "v260331",
-          "port": 12668,
           "description": "...",
           "maintainers": [{"name": "NoName", "email": "example@atdev.co.kr"}]
         }

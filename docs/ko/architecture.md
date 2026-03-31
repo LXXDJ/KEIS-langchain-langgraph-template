@@ -38,12 +38,14 @@ LangGraph 위에 built-in 기능을 얹은 상위 레이어입니다.
 에이전트를 HTTP API로 노출하는 계층입니다.
 
 - `add_routes()`로 자동 엔드포인트 + Playground UI 구성
+- `langgraph.json`의 `graphs` 설정으로 URI 경로 결정
 
 ---
 
 ## Preset 시스템
 
 `build_graph(preset=...)`가 통합 진입점이며, 모든 preset은 `CompiledStateGraph`를 반환합니다.
+모든 preset은 동일한 messages 기반 입출력을 사용합니다.
 
 ```text
 build_graph("chat")           → create_agent()         → CompiledStateGraph
@@ -53,7 +55,7 @@ build_graph("custom")         → 수동 StateGraph 조합    → CompiledStateG
 
 ### custom preset의 핵심 패턴
 
-실제 서비스(trino_retriever 등)에서 검증된 구조:
+실제 서비스에서 검증된 구조:
 
 ```text
 START → preprocess → worker → postprocessor → END
@@ -69,9 +71,9 @@ START → preprocess → worker → postprocessor → END
 ## State 분리 패턴
 
 ```python
-class InputState(TypedDict):    # 외부 입력 (query, system_prompt, llm_configs)
+class InputState(TypedDict):    # 외부 입력 (messages)
 class InternalState(TypedDict): # 내부 처리 (_worker_outputs, 외부 비노출)
-class OutputState(TypedDict):   # 최종 출력 (status, data)
+class OutputState(TypedDict):   # 최종 출력 (messages)
 class State(InputState, InternalState, OutputState): # 전체 합집합
 class Context(TypedDict):       # 런타임 설정 (state에 포함 안 됨)
 ```
@@ -110,7 +112,11 @@ agents/
 app/
 ├── run.py                # 서버 진입점
 └── utils/
-    └── server.py         # LangServe 기반 서빙
+    ├── server.py         # LangServe 기반 서빙
+    ├── langgraph_loader.py # langgraph.json 파싱
+    └── schema.py         # langgraph.json용 dataclass
+
+langgraph.json            # 서비스 설정 (name, version, graphs 등)
 ```
 
 ---
@@ -122,3 +128,4 @@ app/
 3. **serving은 구현과 분리** — 같은 graph를 LangServe로 서빙
 4. **생태계 내장 기능 우선** — 직접 구현보다 LangChain/LangGraph/Deep Agents의 내장 함수 활용
 5. **State 분리로 명확한 경계** — 입력/내부/출력/컨텍스트를 분리하여 유지보수성 확보
+6. **통합 입출력** — 모든 preset이 messages 기반 동일 인터페이스 사용
