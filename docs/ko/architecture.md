@@ -89,8 +89,6 @@ StateGraph(
 )
 ```
 
-API 문서화용 Pydantic 스키마(`InputStateSchema`, `OutputStateSchema`)도 `agents/state.py`에 함께 정의합니다.
-
 ---
 
 ## 디렉토리 구조

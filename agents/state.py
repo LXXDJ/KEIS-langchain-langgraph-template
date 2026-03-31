@@ -14,11 +14,10 @@ Usage:
 from __future__ import annotations
 
 from operator import add
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
-from pydantic import BaseModel, Field
 from typing_extensions import Annotated, TypedDict
 
 
@@ -65,25 +64,3 @@ class Context(TypedDict, total=False):
     """
 
     debug: bool
-
-
-# ══════════════════════════════════════════════════════════════
-# Part 2: Pydantic 스키마 (API 문서화 / Info 엔드포인트)
-# ══════════════════════════════════════════════════════════════
-
-
-class InputStateSchema(BaseModel):
-    """입력 스키마 — API 문서화 및 /info 엔드포인트에 사용."""
-
-    messages: list[dict] = Field(
-        description="메시지 목록",
-        examples=[[{"type": "human", "content": "최근 매출 데이터를 알려주세요."}]],
-    )
-
-
-class OutputStateSchema(BaseModel):
-    """출력 스키마 — API 문서화용."""
-
-    messages: list[dict] = Field(
-        description="응답 메시지 목록",
-    )

@@ -91,8 +91,6 @@ from agents.state import State, InputState, OutputState, Context
 # State       : Input + Internal + Output 합집합
 ```
 
-API 문서화용 Pydantic 스키마(`InputStateSchema`, `OutputStateSchema`)도 함께 제공합니다.
-
 ## 서빙
 
 LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 설정에 따라 URI 경로가 결정됩니다.
