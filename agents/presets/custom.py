@@ -32,7 +32,7 @@ _WORKER_MAP = {
 
 
 def build_custom(
-    worker_type: WorkerType = "deep",
+    worker_type: WorkerType = "default",
     **_kwargs: Any,
 ) -> CompiledStateGraph:
     """수동 StateGraph 노드 조합으로 그래프를 빌드합니다.
