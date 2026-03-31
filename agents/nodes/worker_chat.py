@@ -61,7 +61,10 @@ async def worker_chat(state: State, **kwargs: Any) -> dict[str, Any]:
 
     result = await agent.ainvoke({"messages": messages})
 
-    ai_message = result["messages"][-1]
+    result_messages = result.get("messages", [])
+    if not result_messages:
+        raise ValueError("에이전트가 빈 messages를 반환했습니다.")
+    ai_message = result_messages[-1]
     response_text = ai_message.content if hasattr(ai_message, "content") else str(ai_message)
 
     return {
