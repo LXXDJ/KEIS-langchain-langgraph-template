@@ -1,7 +1,6 @@
-"""Worker 노드 예시 — create_react_agent() 활용.
+"""Worker 노드 예시 — create_agent() 활용.
 
-langgraph.prebuilt.create_react_agent()로 만든 대화형 에이전트를
-서브에이전트로 사용하는 패턴입니다.
+create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용하는 패턴입니다.
 커스텀 도구(@tool)를 붙여서 DB 조회, API 호출 등을 수행할 수 있습니다.
 
 사용법:
@@ -14,9 +13,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
+from langchain.tools import tool
 
 from agents.state import State
 
@@ -43,24 +41,23 @@ def search_database(query: str) -> str:
 
 
 async def worker_chat(state: State, **kwargs: Any) -> Dict[str, Any]:
-    """create_react_agent() 기반 worker 노드.
+    """create_agent() 기반 worker 노드.
 
     특징:
     - @tool로 정의한 커스텀 도구를 에이전트에 전달
     - system_prompt로 에이전트의 역할 지정
-    - LangGraph의 create_react_agent()는 ReAct 패턴으로 동작
+    - middleware로 운영 정책 적용 가능 (요약, fallback 등)
     """
     messages = state.get("messages", [])
 
-    model = ChatOpenAI(model="gpt-4o-mini")
-
-    agent = create_react_agent(
-        model=model,
+    agent = create_agent(
+        model="openai:gpt-4o-mini",
         tools=[get_current_time, search_database],
-        prompt=(
+        system_prompt=(
             "당신은 데이터 분석 어시스턴트입니다. "
             "사용자의 질문에 도구를 활용하여 정확하게 답변하세요."
         ),
+        # middleware=[...],  # 필요 시 미들웨어 추가
     )
 
     result = await agent.ainvoke({"messages": messages})
