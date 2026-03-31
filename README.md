@@ -1,13 +1,13 @@
-# lcdaf
+# langchain-deep-agent-template
 
-LangChain, LangGraph, Deep Agents 생태계를 기반으로 **바로 개발에 사용할 수 있는 에이전트 개발 템플릿**입니다.
+LangChain, LangGraph, Deep Agents 생태계를 기반으로 **바로 개발에 사용할 수 있는 에이전트 개발 보일러플레이트 템플릿**입니다.
 
 생태계의 내장 기능(미들웨어, 샌드박스, 서브에이전트 등)을 최대한 활용하고, 이런 기능들을 쉽게 찾아 쓸 수 있도록 하는 것이 핵심 목표입니다.
 
 ## 프로젝트 구조
 
 ```text
-lcdaf/
+langchain-deep-agent-template/
 ├─ agents/
 │  ├─ __init__.py           # 공개 API
 │  ├─ graph_builder.py      # build_graph(preset=...) 통합 진입점
@@ -43,7 +43,7 @@ lcdaf/
 ```bash
 # 1. 환경 설정
 cp .env.example .env
-# .env 파일에서 LCDAF_PRESET, OPENAI_API_KEY 등 설정
+# .env 파일에서 AGENT_PRESET, OPENAI_API_KEY 등 설정
 
 # 2. 로컬 실행 (uv 필요)
 ./scripts/run-local.sh

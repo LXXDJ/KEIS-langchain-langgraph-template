@@ -34,7 +34,7 @@ fi
 
 # ── 서버 실행 ─────────────────────────────────────────────────
 echo ""
-echo "  lcdaf LangServe"
+echo "  LangServe"
 echo "  http://${HOST}:${PORT}"
 echo "  docs: http://${HOST}:${PORT}/docs"
 echo ""

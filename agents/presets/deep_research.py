@@ -16,7 +16,7 @@ def build_deep_research(
     subagents: list[Any] | None = None,
     skills: list[str] | None = None,
     memory: list[str] | None = None,
-    name: str | None = "lcdaf_deep_research",
+    name: str | None = "deep_research",
     **kwargs: Any,
 ) -> CompiledStateGraph:
     """deepagents.create_deep_agent() 래퍼.

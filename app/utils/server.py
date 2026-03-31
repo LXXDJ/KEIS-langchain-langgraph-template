@@ -41,7 +41,7 @@ def create_app() -> FastAPI:
     """
     config = load_langgraph_config()
 
-    service_name = config.name if config else "lcdaf"
+    service_name = config.name if config else "langchain-deep-agent-template"
     service_version = config.version if config else "v0"
     service_description = config.description if config else ""
 
@@ -51,7 +51,7 @@ def create_app() -> FastAPI:
         description=service_description,
     )
 
-    preset = os.getenv("LCDAF_PRESET", "custom")
+    preset = os.getenv("AGENT_PRESET", "custom")
 
     # ── 그래프 빌드 ───────────────────────────────────────────
     graph = build_graph(preset=preset)  # type: ignore[arg-type]
