@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
 from agents.state import State
 
 
-async def postprocessor(state: State, **kwargs: Any) -> Dict[str, Any]:
+async def postprocessor(state: State, **kwargs: Any) -> dict[str, Any]:
     """_worker_outputs에서 응답을 추출하여 AIMessage로 반환합니다."""
     worker_outputs = state.get("_worker_outputs", [])
 
