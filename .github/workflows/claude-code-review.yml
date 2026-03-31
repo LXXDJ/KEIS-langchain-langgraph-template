@@ -38,7 +38,25 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
+          prompt: |
+            저장소: ${{ github.repository }}
+            PR 번호: ${{ github.event.pull_request.number }}
 
+            이 Pull Request를 리뷰하고 다음 항목에 대한 피드백을 제공해주세요:
+            - 코드 품질 및 모범 사례
+            - 잠재적 버그 또는 문제점
+            - 성능 고려사항
+            - 보안 문제
+            - 테스트 커버리지
+
+            저장소의 CLAUDE.md를 참고하여 스타일과 컨벤션을 확인하세요.
+            건설적이고 도움이 되는 피드백을 제공해주세요.
+
+            `gh pr comment` 명령어를 사용하여 PR에 리뷰 코멘트를 남겨주세요.
+
+          # 한글 응답 + 허용 도구 설정
+          claude_args: |
+            --system-prompt "항상 한글로 응답하세요. 코드 리뷰 피드백도 한글로 작성하세요."
+            --allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"
