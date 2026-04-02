@@ -65,11 +65,62 @@ agents/
 3. `agents/backends/__init__.py`에 export
 4. 독스트링에 "적합한 경우" 섹션을 반드시 포함
 
-### 스킬 / 미들웨어
+### 미들웨어
 
-- 각각 `agents/skills/`, `agents/middlewares/` 에 파일 생성
-- `__init__.py`에 export
-- 미들웨어는 운영 정책 단위로 분리 (예: `summarization.py`, `fallback.py`)
+`agents/middlewares/`에 에이전트 실행 정책을 팩토리 함수로 정의합니다.
+함수명은 `create_*_middleware` 패턴을 따릅니다.
+
+컨텍스트 관리:
+- `create_summarization_middleware()` — 대화 요약 (토큰 초과 방지)
+- `create_context_editing_middleware()` — 오래된 도구 출력 정리
+
+실행 제어:
+- `create_hitl_middleware()` — 도구 실행 전 사람 승인
+- `create_model_call_limit_middleware()` — 모델 호출 횟수 제한
+- `create_tool_call_limit_middleware()` — 도구 호출 횟수 제한
+
+안정성:
+- `create_model_fallback_middleware()` — 모델 실패 시 대체 모델 전환
+- `create_model_retry_middleware()` — 모델 API 재시도
+- `create_tool_retry_middleware()` — 도구 호출 재시도
+
+보안/정책:
+- `create_pii_detection_middleware()` — 개인정보 탐지·마스킹
+
+에이전트 능력:
+- `create_todo_list_middleware()` — 작업 계획·추적
+- `create_tool_selector_middleware()` — LLM 기반 도구 필터링
+
+테스트:
+- `create_tool_emulator_middleware()` — LLM으로 도구 응답 에뮬레이션
+
+새 미들웨어 추가 시:
+1. `agents/middlewares/` 에 `{name}.py` 파일 생성
+2. `def create_{name}_middleware(...)` 팩토리 함수 정의
+3. `agents/middlewares/__init__.py`에 export
+4. 독스트링에 "적합한 경우" 섹션을 반드시 포함
+
+### 스킬
+
+`agents/skills/`에 Deep Agents 기반 재사용 가능한 능력 단위를 정의합니다.
+스킬은 특정 에이전트의 특화된 능력을 캡슐화하며, 다른 에이전트와 공유할 수 있습니다.
+
+스킬 정의:
+- 단일 책임 원칙: 하나의 스킬은 하나의 능력을 담당
+- 파일명: snake_case (`research_skill.py`, `code_analysis_skill.py`)
+- 클래스명: PascalCase로 끝에 `Skill` 추가 (`ResearchSkill`, `CodeAnalysisSkill`)
+
+스킬 구성 요소:
+- `name`: 스킬 고유 이름 (영어, snake_case)
+- `description`: 스킬 기능 설명 (한국어)
+- `tools`: 스킬에서 사용하는 도구 리스트
+- `run()` 또는 `__call__()`: 스킬 실행 메서드
+
+새 스킬 추가 시:
+1. `agents/skills/` 에 `{name}_skill.py` 파일 생성
+2. 스킬 클래스 정의 (예: `class ResearchSkill`)
+3. `agents/skills/__init__.py`에 export
+4. 필요한 preset에서 스킬 인스턴스 생성 및 등록
 
 ## State 변경 규칙
 
