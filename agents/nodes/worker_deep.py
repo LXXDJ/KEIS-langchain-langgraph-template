@@ -5,11 +5,9 @@ planning, filesystem, subagent, summarization 미들웨어가 자동 구성되�
 복잡한 질문에 대해 계획을 세우고 단계별로 처리합니다.
 
 사용법:
-    custom.py의 build_custom()에서 worker 노드를 이 함수로 교체합니다.
+    custom.py의 build_custom()에서 worker_type="deep"을 지정합니다.
 
-    # agents/presets/custom.py
-    from agents.nodes.worker_deep import worker_deep
-    builder.add_node("worker", worker_deep)
+    build_custom(worker_type="deep")
 """
 
 from __future__ import annotations
@@ -19,6 +17,7 @@ from typing import Any
 from deepagents import create_deep_agent
 from langchain.tools import tool
 
+from agents.backends import create_filesystem_backend
 from agents.state import State
 
 # ── 커스텀 도구 정의 ──────────────────────────────────────────
@@ -49,12 +48,17 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
     - subagent: 하위 작업을 서브에이전트에게 위임
     - summarization: 결과를 요약하여 최종 응답 생성
     - filesystem: 가상 파일시스템으로 중간 결과 관리
+
+    Note:
+        에이전트를 매 호출마다 생성합니다. API 서빙 환경(SSE 등)에서
+        동시 요청 간 백엔드 상태 격리를 보장하기 위한 의도적 설계입니다.
     """
     messages = state.get("messages", [])
 
     agent = create_deep_agent(
         model="openai:gpt-4o-mini",
         tools=[search_web, read_document],
+        backend=create_filesystem_backend(),
         system_prompt=(
             "당신은 심층 리서치 에이전트입니다. "
             "복잡한 질문에 대해 계획을 세우고, "
