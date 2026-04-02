@@ -7,6 +7,8 @@ from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
 
+from agents.backends import create_filesystem_backend
+
 
 def build_deep_research(
     *,
@@ -34,7 +36,7 @@ def build_deep_research(
                 build_deep_research(backend=create_composite_backend())
                 build_deep_research(backend=create_store_backend())
     """
-    # NOTE: 지연 임포트 — agents ↔ deepagents 간 순환 참조 방지
+    # NOTE: 지연 임포트 — deepagents는 무거운 서드파티이므로 호출 시점에 로드
     from deepagents import create_deep_agent
 
     build_kwargs: dict[str, Any] = {
@@ -54,9 +56,6 @@ def build_deep_research(
     }
 
     if backend is None:
-        # NOTE: 지연 임포트 — agents.presets ↔ agents.backends 간 순환 참조 방지
-        from agents.backends import create_filesystem_backend
-
         backend = create_filesystem_backend()
 
     build_kwargs["backend"] = backend

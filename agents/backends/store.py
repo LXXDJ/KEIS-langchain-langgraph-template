@@ -14,15 +14,12 @@ langgraph의 InMemoryStore 또는 외부 스토어와 함께 사용합니다.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from deepagents.backends import StoreBackend
 from deepagents.backends.protocol import BackendProtocol
 
-# ── 타입 정의 ────────────────────────────────────────────────
-
-BackendFactory = Callable[[Any], BackendProtocol]
+from agents.backends._types import BackendFactory
 
 
 def create_store_backend(

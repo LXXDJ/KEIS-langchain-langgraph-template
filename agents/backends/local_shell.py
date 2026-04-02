@@ -29,7 +29,8 @@ def create_local_shell_backend(
 
     Args:
         root_dir: 루트 디렉토리 경로. None이면 AGENT_OUTPUT_DIR 또는 ./outputs 사용.
-        virtual_mode: True면 root_dir 밖 접근 차단 (권장).
+        virtual_mode: True면 root_dir 밖의 파일 접근 차단 (파일 I/O만 해당).
+              셸 명령(shell())은 virtual_mode와 무관하게 제한 없이 실행됩니다.
 
     지원 연산 (FilesystemBackend 전체 + 셸):
         - ls(path)              — 디렉토리 목록 조회
