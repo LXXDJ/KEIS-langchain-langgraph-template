@@ -20,6 +20,10 @@ from langchain.tools import tool
 from agents.backends import create_filesystem_backend
 from agents.state import State
 
+# ── 백엔드 (모듈 수준에서 한 번만 생성) ─────────────────────────
+
+_default_backend = create_filesystem_backend()
+
 # ── 커스텀 도구 정의 ──────────────────────────────────────────
 
 
@@ -54,7 +58,7 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
     agent = create_deep_agent(
         model="openai:gpt-4o-mini",
         tools=[search_web, read_document],
-        backend=create_filesystem_backend(),  # 백엔드 팩토리 사용
+        backend=_default_backend,
         system_prompt=(
             "당신은 심층 리서치 에이전트입니다. "
             "복잡한 질문에 대해 계획을 세우고, "

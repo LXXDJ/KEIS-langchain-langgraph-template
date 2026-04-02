@@ -10,6 +10,7 @@ CompositeBackend로 경로 prefix에 따라 백엔드를 라우팅합니다.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
@@ -17,11 +18,15 @@ from deepagents.backends.protocol import BackendProtocol
 
 from agents.backends._defaults import resolve_output_dir
 
+# ── 타입 정의 ────────────────────────────────────────────────
+
+BackendFactory = Callable[[Any], BackendProtocol]
+
 
 def create_composite_backend(
     root_dir: str | None = None,
     memory_prefix: str = "/memories/",
-) -> Any:
+) -> BackendFactory:
     """StateBackend + FilesystemBackend 조합 백엔드를 생성합니다.
 
     경로 prefix에 따라 백엔드를 라우팅합니다:

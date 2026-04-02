@@ -14,15 +14,20 @@ langgraph의 InMemoryStore 또는 외부 스토어와 함께 사용합니다.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from deepagents.backends import StoreBackend
 from deepagents.backends.protocol import BackendProtocol
 
+# ── 타입 정의 ────────────────────────────────────────────────
+
+BackendFactory = Callable[[Any], BackendProtocol]
+
 
 def create_store_backend(
     namespace: Any | None = None,
-) -> Any:
+) -> BackendFactory:
     """LangGraph BaseStore 기반 크로스스레드 영속 백엔드를 생성합니다.
 
     langgraph의 InMemoryStore 또는 외부 스토어와 함께 사용합니다.
@@ -38,6 +43,7 @@ def create_store_backend(
     Returns:
         BackendFactory (런타임을 받는 callable).
     """
+
     def factory(rt: Any) -> BackendProtocol:
         kwargs: dict[str, Any] = {}
         if namespace is not None:
