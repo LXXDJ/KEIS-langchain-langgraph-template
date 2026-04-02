@@ -15,14 +15,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_tool_emulator_middleware(
     *,
     tools: list[str] | None = None,
     model: str = "openai:gpt-4o-mini",
-) -> Any:
+) -> AgentMiddleware:
     """LLM 도구 에뮬레이터 미들웨어를 생성합니다.
 
     Args:
@@ -34,10 +37,11 @@ def create_tool_emulator_middleware(
         - 외부 API 비용 없이 통합 테스트
         - 에이전트의 도구 선택 로직 검증
     """
-    from langchain.middleware import LLMToolEmulatorMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import LLMToolEmulator
 
-    kwargs: dict[str, Any] = {"model": model}
+    kwargs: dict[str, object] = {"model": model}
     if tools is not None:
         kwargs["tools"] = tools
 
-    return LLMToolEmulatorMiddleware(**kwargs)
+    return LLMToolEmulator(**kwargs)

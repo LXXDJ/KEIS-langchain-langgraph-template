@@ -13,14 +13,17 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_todo_list_middleware(
     *,
     system_prompt: str | None = None,
     tool_description: str | None = None,
-) -> Any:
+) -> AgentMiddleware:
     """To-Do 리스트 미들웨어를 생성합니다.
 
     Args:
@@ -32,12 +35,13 @@ def create_todo_list_middleware(
         - 에이전트가 계획을 세우고 단계별로 실행해야 할 때
         - 작업 진행률 추적이 필요한 경우
     """
-    from langchain.middleware import ToDoListMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import TodoListMiddleware
 
-    kwargs: dict[str, Any] = {}
+    kwargs: dict[str, object] = {}
     if system_prompt is not None:
         kwargs["system_prompt"] = system_prompt
     if tool_description is not None:
         kwargs["tool_description"] = tool_description
 
-    return ToDoListMiddleware(**kwargs)
+    return TodoListMiddleware(**kwargs)

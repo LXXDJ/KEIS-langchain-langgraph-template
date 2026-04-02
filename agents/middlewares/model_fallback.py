@@ -8,24 +8,27 @@
 
     agent = create_deep_agent(
         middleware=[create_model_fallback_middleware(
-            "anthropic:claude-3-5-sonnet",
-            "openai:gpt-4o",
+            models=["anthropic:claude-3-5-sonnet", "openai:gpt-4o"],
         )],
     )
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_model_fallback_middleware(
-    *models: str,
-) -> Any:
+    *,
+    models: list[str],
+) -> AgentMiddleware:
     """모델 폴백 미들웨어를 생성합니다.
 
     Args:
-        *models: 대체 모델 식별자 목록 (순서대로 시도).
+        models: 대체 모델 식별자 목록 (순서대로 시도).
             첫 번째 모델부터 시도하고, 실패 시 다음 모델로 전환합니다.
 
     적합한 경우:
@@ -33,7 +36,8 @@ def create_model_fallback_middleware(
         - 멀티 프로바이더 구성 (OpenAI → Anthropic → 기타)
         - 레이트 리밋 초과 시 자동 우회
     """
-    from langchain.middleware import ModelFallbackMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import ModelFallbackMiddleware
 
     if not models:
         raise ValueError("최소 하나의 대체 모델을 지정해야 합니다.")

@@ -8,7 +8,10 @@
 
     agent = create_deep_agent(
         middleware=[create_hitl_middleware(
-            interrupt_on={"execute_sql": ["approve", "edit", "reject"]},
+            interrupt_on={
+                "execute_sql": {"allowed_decisions": ["approve", "edit", "reject"]},
+                "send_email": True,
+            },
         )],
         checkpointer=MemorySaver(),  # 상태 유지 필수
     )
@@ -16,19 +19,26 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_hitl_middleware(
     *,
-    interrupt_on: dict[str, list[str]],
-) -> Any:
+    interrupt_on: dict[str, bool | dict[str, Any]],
+) -> AgentMiddleware:
     """Human-in-the-Loop 미들웨어를 생성합니다.
 
     Args:
-        interrupt_on: 도구별 중단 옵션 매핑.
-            키 = 도구 이름, 값 = 허용 옵션 리스트.
-            옵션: "approve" (승인), "edit" (수정), "reject" (거부).
+        interrupt_on: 도구별 중단 설정 매핑.
+            키 = 도구 이름.
+            값 = ``True`` (기본 승인 요청) 또는 ``InterruptOnConfig`` dict.
+            InterruptOnConfig 키:
+                allowed_decisions — ``["approve", "edit", "reject"]`` 중 선택.
+                description — (선택) 승인 요청 시 표시할 설명.
+            이 파라미터는 필수입니다 — 중단 지점 없이 HITL은 동작하지 않습니다.
 
     Note:
         반드시 checkpointer와 함께 사용해야 합니다.
@@ -38,6 +48,7 @@ def create_hitl_middleware(
         - DB 쓰기, 외부 API 호출 등 되돌릴 수 없는 작업
         - 결제·송금 등 금전 관련 작업
     """
-    from langchain.middleware import HumanInTheLoopMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import HumanInTheLoopMiddleware
 
     return HumanInTheLoopMiddleware(interrupt_on=interrupt_on)

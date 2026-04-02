@@ -13,7 +13,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_tool_selector_middleware(
@@ -22,7 +25,7 @@ def create_tool_selector_middleware(
     max_tools: int = 5,
     always_include: list[str] | None = None,
     system_prompt: str | None = None,
-) -> Any:
+) -> AgentMiddleware:
     """LLM 도구 선택기 미들웨어를 생성합니다.
 
     Args:
@@ -36,9 +39,10 @@ def create_tool_selector_middleware(
         - 질문마다 관련 도구가 달라지는 경우
         - 불필요한 도구가 모델 컨텍스트를 차지하는 문제 해결
     """
-    from langchain.middleware import LLMToolSelectorMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import LLMToolSelectorMiddleware
 
-    kwargs: dict[str, Any] = {
+    kwargs: dict[str, object] = {
         "model": model,
         "max_tools": max_tools,
     }

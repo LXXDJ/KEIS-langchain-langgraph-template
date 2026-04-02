@@ -16,7 +16,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_tool_call_limit_middleware(
@@ -25,7 +28,7 @@ def create_tool_call_limit_middleware(
     thread_limit: int | None = None,
     run_limit: int | None = None,
     exit_behavior: Literal["continue", "error", "end"] = "continue",
-) -> Any:
+) -> AgentMiddleware:
     """도구 호출 제한 미들웨어를 생성합니다.
 
     Args:
@@ -41,9 +44,10 @@ def create_tool_call_limit_middleware(
         - 비용이 높은 외부 API 도구의 호출 횟수 제한
         - 특정 도구의 남용 방지
     """
-    from langchain.middleware import ToolCallLimitMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import ToolCallLimitMiddleware
 
-    kwargs: dict[str, Any] = {"exit_behavior": exit_behavior}
+    kwargs: dict[str, object] = {"exit_behavior": exit_behavior}
     if tool_name is not None:
         kwargs["tool_name"] = tool_name
     if thread_limit is not None:

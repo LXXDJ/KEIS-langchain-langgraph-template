@@ -16,18 +16,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_pii_detection_middleware(
     *,
     pii_type: Literal["email", "credit_card", "ip", "mac_address", "url"] | str,
     strategy: Literal["block", "redact", "mask", "hash"] = "redact",
-    detector: Any | None = None,
+    detector: object | None = None,
     apply_to_input: bool = True,
     apply_to_output: bool = True,
     apply_to_tool_results: bool = True,
-) -> Any:
+) -> AgentMiddleware:
     """PII 탐지 미들웨어를 생성합니다.
 
     Args:
@@ -48,9 +51,10 @@ def create_pii_detection_middleware(
         - 의료·금융 분야 컴플라이언스 요구사항
         - 개인정보 유출 방지가 필요한 서비스
     """
-    from langchain.middleware import PIIDetectionMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import PIIMiddleware
 
-    kwargs: dict[str, Any] = {
+    kwargs: dict[str, object] = {
         "pii_type": pii_type,
         "strategy": strategy,
         "apply_to_input": apply_to_input,
@@ -60,4 +64,4 @@ def create_pii_detection_middleware(
     if detector is not None:
         kwargs["detector"] = detector
 
-    return PIIDetectionMiddleware(**kwargs)
+    return PIIMiddleware(**kwargs)

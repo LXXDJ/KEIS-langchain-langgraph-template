@@ -102,8 +102,25 @@ agents/
 
 ### 스킬
 
-- `agents/skills/` 에 파일 생성
-- `__init__.py`에 export
+`agents/skills/`에 Deep Agents 기반 재사용 가능한 능력 단위를 정의합니다.
+스킬은 특정 에이전트의 특화된 능력을 캡슐화하며, 다른 에이전트와 공유할 수 있습니다.
+
+스킬 정의:
+- 단일 책임 원칙: 하나의 스킬은 하나의 능력을 담당
+- 파일명: snake_case (`research_skill.py`, `code_analysis_skill.py`)
+- 클래스명: PascalCase로 끝에 `Skill` 추가 (`ResearchSkill`, `CodeAnalysisSkill`)
+
+스킬 구성 요소:
+- `name`: 스킬 고유 이름 (영어, snake_case)
+- `description`: 스킬 기능 설명 (한국어)
+- `tools`: 스킬에서 사용하는 도구 리스트
+- `run()` 또는 `__call__()`: 스킬 실행 메서드
+
+새 스킬 추가 시:
+1. `agents/skills/` 에 `{name}_skill.py` 파일 생성
+2. 스킬 클래스 정의 (예: `class ResearchSkill`)
+3. `agents/skills/__init__.py`에 export
+4. 필요한 preset에서 스킬 인스턴스 생성 및 등록
 
 ## State 변경 규칙
 

@@ -13,7 +13,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_model_call_limit_middleware(
@@ -21,7 +24,7 @@ def create_model_call_limit_middleware(
     thread_limit: int | None = None,
     run_limit: int | None = None,
     exit_behavior: Literal["end", "error"] = "end",
-) -> Any:
+) -> AgentMiddleware:
     """모델 호출 제한 미들웨어를 생성합니다.
 
     Args:
@@ -36,7 +39,8 @@ def create_model_call_limit_middleware(
         - 테스트 환경에서 호출 수 제한
         - 에이전트 무한루프 방지
     """
-    from langchain.middleware import ModelCallLimitMiddleware
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import ModelCallLimitMiddleware
 
     kwargs: dict[str, Any] = {"exit_behavior": exit_behavior}
     if thread_limit is not None:

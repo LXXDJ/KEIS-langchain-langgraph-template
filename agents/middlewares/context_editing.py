@@ -13,7 +13,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from langchain.agents.middleware.types import AgentMiddleware
 
 
 def create_context_editing_middleware(
@@ -24,7 +27,7 @@ def create_context_editing_middleware(
     exclude_tools: list[str] | None = None,
     placeholder: str = "[이전 도구 출력 생략]",
     token_count_method: str = "approximate",
-) -> Any:
+) -> AgentMiddleware:
     """컨텍스트 편집 미들웨어를 생성합니다.
 
     Args:
@@ -39,8 +42,8 @@ def create_context_editing_middleware(
         - 도구를 빈번하게 호출하는 에이전트
         - Summarization과 조합하여 컨텍스트 이중 관리
     """
-    from langchain.middleware import ContextEditingMiddleware
-    from langchain.middleware.context_editing import ClearToolUsesEdit
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import ContextEditingMiddleware, ClearToolUsesEdit
 
     edit = ClearToolUsesEdit(
         trigger=trigger,
