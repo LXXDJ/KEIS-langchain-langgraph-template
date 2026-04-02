@@ -7,7 +7,7 @@ from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.backends import create_filesystem_backend
+from agents.backends import Backend, create_filesystem_backend
 
 
 def build_deep_research(
@@ -16,7 +16,7 @@ def build_deep_research(
     tools: Sequence[Any] | None = None,
     system_prompt: str | None = None,
     middleware: Sequence[Any] = (),
-    backend: Any | None = None,
+    backend: Backend | None = None,
     subagents: list[Any] | None = None,
     skills: list[str] | None = None,
     memory: list[str] | None = None,

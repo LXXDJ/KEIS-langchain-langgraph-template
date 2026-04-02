@@ -17,6 +17,7 @@ from typing import Any
 from deepagents import create_deep_agent
 from langchain.tools import tool
 
+from agents.backends import create_filesystem_backend
 from agents.state import State
 
 # ── 커스텀 도구 정의 ──────────────────────────────────────────
@@ -49,8 +50,6 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
     - filesystem: 가상 파일시스템으로 중간 결과 관리
     """
     messages = state.get("messages", [])
-
-    from agents.backends import create_filesystem_backend
 
     agent = create_deep_agent(
         model="openai:gpt-4o-mini",

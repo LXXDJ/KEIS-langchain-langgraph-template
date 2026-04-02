@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from deepagents.backends import LocalShellBackend
 
-from agents.backends._defaults import resolve_output_dir
+from agents.backends._defaults import ensure_output_dir, resolve_output_dir
 
 
 def create_local_shell_backend(
@@ -56,4 +56,6 @@ def create_local_shell_backend(
     Returns:
         LocalShellBackend 인스턴스.
     """
-    return LocalShellBackend(root_dir=resolve_output_dir(root_dir), virtual_mode=virtual_mode)
+    resolved = resolve_output_dir(root_dir)
+    ensure_output_dir(resolved)
+    return LocalShellBackend(root_dir=resolved, virtual_mode=virtual_mode)

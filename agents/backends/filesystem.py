@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from deepagents.backends import FilesystemBackend
 
-from agents.backends._defaults import resolve_output_dir
+from agents.backends._defaults import ensure_output_dir, resolve_output_dir
 
 
 def create_filesystem_backend(
@@ -41,4 +41,6 @@ def create_filesystem_backend(
     Returns:
         FilesystemBackend 인스턴스.
     """
-    return FilesystemBackend(root_dir=resolve_output_dir(root_dir), virtual_mode=virtual_mode)
+    resolved = resolve_output_dir(root_dir)
+    ensure_output_dir(resolved)
+    return FilesystemBackend(root_dir=resolved, virtual_mode=virtual_mode)

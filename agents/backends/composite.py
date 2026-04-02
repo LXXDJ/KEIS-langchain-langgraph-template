@@ -15,23 +15,23 @@ from typing import Any
 from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from deepagents.backends.protocol import BackendProtocol
 
-from agents.backends._defaults import resolve_output_dir
+from agents.backends._defaults import ensure_output_dir, resolve_output_dir
 from agents.backends._types import BackendFactory
 
 
 def create_composite_backend(
     root_dir: str | None = None,
-    memory_prefix: str = "/memories/",
+    filesystem_prefix: str = "/memories/",
 ) -> BackendFactory:
     """StateBackend + FilesystemBackend 조합 백엔드를 생성합니다.
 
     경로 prefix에 따라 백엔드를 라우팅합니다:
-        - memory_prefix 경로 → FilesystemBackend (파일 기반 메모리)
+        - filesystem_prefix 경로 → FilesystemBackend (파일 기반 메모리)
         - 그 외 → StateBackend (에이전트 실행 상태)
 
     Args:
         root_dir: FilesystemBackend 루트 디렉토리. None이면 AGENT_OUTPUT_DIR 또는 ./outputs 사용.
-        memory_prefix: 파일시스템으로 라우팅할 경로 접두사.
+        filesystem_prefix: 파일시스템으로 라우팅할 경로 접두사.
 
     지원 연산 (라우팅된 백엔드에 따라 다름):
         FilesystemBackend 영역 — ls, read_file, write_file, edit_file, glob, grep
@@ -50,10 +50,11 @@ def create_composite_backend(
     resolved = resolve_output_dir(root_dir)
 
     def factory(rt: Any) -> BackendProtocol:
+        ensure_output_dir(resolved)
         return CompositeBackend(
             default=StateBackend(rt),
             routes={
-                memory_prefix: FilesystemBackend(
+                filesystem_prefix: FilesystemBackend(
                     root_dir=resolved,
                     virtual_mode=True,
                 ),
