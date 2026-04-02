@@ -55,4 +55,4 @@ def create_local_shell_backend(
     Returns:
         LocalShellBackend 인스턴스.
     """
-    return LocalShellBackend(root_dir=resolve_output_dir(root_dir), virtual_mode=False)
+    return LocalShellBackend(root_dir=resolve_output_dir(root_dir), virtual_mode=virtual_mode)
