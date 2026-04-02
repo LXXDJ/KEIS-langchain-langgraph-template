@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -51,7 +51,7 @@ def create_tool_retry_middleware(
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import ToolRetryMiddleware
 
-    kwargs: dict[str, object] = {
+    kwargs: dict[str, Any] = {
         "max_retries": max_retries,
         "on_failure": on_failure,
         "backoff_factor": backoff_factor,

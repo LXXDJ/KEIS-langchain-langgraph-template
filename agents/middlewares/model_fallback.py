@@ -36,10 +36,10 @@ def create_model_fallback_middleware(
         - 멀티 프로바이더 구성 (OpenAI → Anthropic → 기타)
         - 레이트 리밋 초과 시 자동 우회
     """
-    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
-    from langchain.agents.middleware import ModelFallbackMiddleware
-
     if not models:
         raise ValueError("최소 하나의 대체 모델을 지정해야 합니다.")
+
+    # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
+    from langchain.agents.middleware import ModelFallbackMiddleware
 
     return ModelFallbackMiddleware(models[0], *models[1:])

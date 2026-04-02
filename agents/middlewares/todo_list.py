@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -38,7 +38,7 @@ def create_todo_list_middleware(
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import TodoListMiddleware
 
-    kwargs: dict[str, object] = {}
+    kwargs: dict[str, Any] = {}
     if system_prompt is not None:
         kwargs["system_prompt"] = system_prompt
     if tool_description is not None:

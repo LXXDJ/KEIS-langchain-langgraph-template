@@ -16,7 +16,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -44,10 +44,13 @@ def create_tool_call_limit_middleware(
         - 비용이 높은 외부 API 도구의 호출 횟수 제한
         - 특정 도구의 남용 방지
     """
+    if thread_limit is None and run_limit is None:
+        raise ValueError("thread_limit 또는 run_limit 중 하나는 반드시 지정해야 합니다.")
+
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import ToolCallLimitMiddleware
 
-    kwargs: dict[str, object] = {"exit_behavior": exit_behavior}
+    kwargs: dict[str, Any] = {"exit_behavior": exit_behavior}
     if tool_name is not None:
         kwargs["tool_name"] = tool_name
     if thread_limit is not None:

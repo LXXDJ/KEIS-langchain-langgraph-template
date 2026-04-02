@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -39,6 +39,9 @@ def create_model_call_limit_middleware(
         - 테스트 환경에서 호출 수 제한
         - 에이전트 무한루프 방지
     """
+    if thread_limit is None and run_limit is None:
+        raise ValueError("thread_limit 또는 run_limit 중 하나는 반드시 지정해야 합니다.")
+
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import ModelCallLimitMiddleware
 

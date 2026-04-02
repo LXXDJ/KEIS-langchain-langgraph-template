@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -40,7 +40,7 @@ def create_tool_emulator_middleware(
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import LLMToolEmulator
 
-    kwargs: dict[str, object] = {"model": model}
+    kwargs: dict[str, Any] = {"model": model}
     if tools is not None:
         kwargs["tools"] = tools
 

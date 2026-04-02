@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -34,6 +34,8 @@ def _parse_condition(raw: int | float | tuple[str, int | float]) -> _TriggerValu
     if isinstance(raw, tuple):
         return raw  # type: ignore[return-value]
     if isinstance(raw, float):
+        if not (0.0 < raw <= 1.0):
+            raise ValueError(f"fraction 값은 0 초과 1 이하여야 합니다: {raw}")
         return ("fraction", raw)
     return ("tokens", raw)
 
@@ -66,7 +68,7 @@ def create_summarization_middleware(
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import SummarizationMiddleware
 
-    kwargs: dict[str, object] = {
+    kwargs: dict[str, Any] = {
         "model": model,
         "keep": _parse_condition(keep),
     }

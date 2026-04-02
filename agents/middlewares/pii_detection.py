@@ -16,7 +16,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+import re
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -26,7 +28,7 @@ def create_pii_detection_middleware(
     *,
     pii_type: Literal["email", "credit_card", "ip", "mac_address", "url"] | str,
     strategy: Literal["block", "redact", "mask", "hash"] = "redact",
-    detector: object | None = None,
+    detector: re.Pattern[str] | Callable[[str], bool] | None = None,
     apply_to_input: bool = True,
     apply_to_output: bool = True,
     apply_to_tool_results: bool = True,
@@ -54,7 +56,7 @@ def create_pii_detection_middleware(
     # NOTE: 선택적 미들웨어의 heavy dependency 로딩을 사용 시점까지 지연
     from langchain.agents.middleware import PIIMiddleware
 
-    kwargs: dict[str, object] = {
+    kwargs: dict[str, Any] = {
         "pii_type": pii_type,
         "strategy": strategy,
         "apply_to_input": apply_to_input,

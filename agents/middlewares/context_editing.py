@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from langchain.agents.middleware.types import AgentMiddleware
@@ -26,7 +26,7 @@ def create_context_editing_middleware(
     clear_tool_inputs: bool = False,
     exclude_tools: list[str] | None = None,
     placeholder: str = "[이전 도구 출력 생략]",
-    token_count_method: str = "approximate",
+    token_count_method: Literal["approximate", "model"] = "approximate",
 ) -> AgentMiddleware:
     """컨텍스트 편집 미들웨어를 생성합니다.
 
