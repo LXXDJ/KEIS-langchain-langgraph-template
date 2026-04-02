@@ -12,10 +12,12 @@ planning, filesystem, subagent, summarization 미들웨어가 자동 구성되�
 
 from __future__ import annotations
 
+import functools
 from typing import Any
 
 from deepagents import create_deep_agent
 from langchain.tools import tool
+from langgraph.graph.state import CompiledStateGraph
 
 from agents.backends import create_filesystem_backend
 from agents.state import State
@@ -37,21 +39,13 @@ def read_document(path: str) -> str:
     return f"[문서 내용] '{path}' 파일의 내용: 샘플 문서 텍스트"
 
 
-# ── Worker 노드 ──────────────────────────────────────────────
+# ── 에이전트 초기화 (지연 싱글턴) ─────────────────────────────
 
 
-async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
-    """create_deep_agent() 기반 worker 노드.
-
-    특징:
-    - planning: 복잡한 질문을 하위 작업으로 분해
-    - subagent: 하위 작업을 서브에이전트에게 위임
-    - summarization: 결과를 요약하여 최종 응답 생성
-    - filesystem: 가상 파일시스템으로 중간 결과 관리
-    """
-    messages = state.get("messages", [])
-
-    agent = create_deep_agent(
+@functools.cache
+def _build_agent() -> CompiledStateGraph:
+    """Deep 에이전트를 한 번만 생성하고 캐시합니다."""
+    return create_deep_agent(
         model="openai:gpt-4o-mini",
         tools=[search_web, read_document],
         backend=create_filesystem_backend(),
@@ -66,7 +60,22 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
         # memory=[...],     # 필요 시 메모리 추가
     )
 
-    result = await agent.ainvoke({"messages": messages})
+
+# ── Worker 노드 ──────────────────────────────────────────────
+
+
+async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
+    """create_deep_agent() 기반 worker 노드.
+
+    특징:
+    - planning: 복잡한 질문을 하위 작업으로 분해
+    - subagent: 하위 작업을 서브에이전트에게 위임
+    - summarization: 결과를 요약하여 최종 응답 생성
+    - filesystem: 가상 파일시스템으로 중간 결과 관리
+    """
+    messages = state.get("messages", [])
+
+    result = await _build_agent().ainvoke({"messages": messages})
 
     result_messages = result.get("messages", [])
     if not result_messages:

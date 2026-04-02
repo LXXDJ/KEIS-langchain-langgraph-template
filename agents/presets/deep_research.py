@@ -39,25 +39,22 @@ def build_deep_research(
     # NOTE: 지연 임포트 — deepagents는 무거운 서드파티이므로 호출 시점에 로드
     from deepagents import create_deep_agent
 
-    build_kwargs: dict[str, Any] = {
-        "model": model,
-        "tools": list(tools or []),
-        "system_prompt": system_prompt or (
+    if backend is None:
+        backend = create_filesystem_backend()
+
+    return create_deep_agent(
+        model=model,
+        tools=list(tools or []),
+        system_prompt=system_prompt or (
             "You are a deep research assistant. "
             "Plan carefully, use tools when useful, "
             "and produce structured answers."
         ),
-        "middleware": middleware,
-        "subagents": subagents,
-        "skills": skills,
-        "memory": memory,
-        "name": name,
+        middleware=middleware,
+        backend=backend,
+        subagents=subagents,
+        skills=skills,
+        memory=memory,
+        name=name,
         **kwargs,
-    }
-
-    if backend is None:
-        backend = create_filesystem_backend()
-
-    build_kwargs["backend"] = backend
-
-    return create_deep_agent(**build_kwargs)
+    )

@@ -38,6 +38,10 @@ def create_filesystem_backend(
         - 로컬 개발/테스트
         - 파일 읽기·쓰기만 필요한 단순 에이전트
 
+    Note:
+        인스턴스를 직접 반환하므로, 호출 시점에 출력 디렉토리를 생성합니다.
+        BackendFactory를 반환하는 create_composite_backend 등은 런타임 시점에 생성합니다.
+
     Returns:
         FilesystemBackend 인스턴스.
     """

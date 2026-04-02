@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, Union
+from typing import Any
 
 from deepagents.backends.protocol import BackendProtocol
 
@@ -11,7 +11,7 @@ from deepagents.backends.protocol import BackendProtocol
 BackendFactory = Callable[[Any], BackendProtocol]
 """런타임(ToolRuntime)을 받아 BackendProtocol 인스턴스를 반환하는 팩토리."""
 
-Backend = Union[BackendProtocol, BackendFactory]
+Backend = BackendProtocol | BackendFactory
 """백엔드 팩토리 함수들의 반환 타입 유니언.
 
 create_filesystem_backend(), create_local_shell_backend()는 BackendProtocol 인스턴스를,
