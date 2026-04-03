@@ -10,7 +10,8 @@ preset 시스템으로 에이전트 유형을 선택하고, 모든 preset은 동
 ## 실행 방법
 
 ```bash
-cp .env.example .env   # AGENT_PRESET, OPENAI_API_KEY 설정
+cp .env.example .env   # OPENAI_API_KEY 등 설정
+# langgraph.json의 "preset" 필드로 에이전트 유형 선택 (custom, chat, deep_research)
 ./scripts/run-local.sh # uv 기반 로컬 실행
 ./scripts/run-docker.sh # Docker 실행
 ```

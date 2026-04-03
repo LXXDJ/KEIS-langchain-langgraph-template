@@ -10,8 +10,11 @@ from __future__ import annotations
 import os
 
 import uvicorn
+from dotenv import load_dotenv
 
 from app.utils.server import create_app
+
+load_dotenv()
 
 app = create_app()
 

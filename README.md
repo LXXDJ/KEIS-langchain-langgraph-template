@@ -50,7 +50,8 @@ langchain-deep-agent-template/
 ```bash
 # 1. 환경 설정
 cp .env.example .env
-# .env 파일에서 AGENT_PRESET, OPENAI_API_KEY 등 설정
+# .env 파일에서 OPENAI_API_KEY 등 설정
+# langgraph.json의 "preset" 필드로 에이전트 유형 선택
 
 # 2. 로컬 실행 (uv 필요)
 ./scripts/run-local.sh
@@ -185,7 +186,6 @@ LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 키에서 U
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `AGENT_PRESET` | `custom` | 사용할 preset (`custom`, `chat`, `deep_research`) |
 | `OPENAI_API_KEY` | — | chat, deep_research preset에서 필요 |
 | `HOST` | `0.0.0.0` | 서버 바인딩 호스트 |
 | `PORT` | `8000` | 서버 포트 |

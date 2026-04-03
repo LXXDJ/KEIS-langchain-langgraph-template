@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from langchain_core.messages import AnyMessage
@@ -51,7 +49,7 @@ def create_app() -> FastAPI:
         description=service_description,
     )
 
-    preset = os.getenv("AGENT_PRESET", "custom")
+    preset = config.preset if config else "custom"
 
     # ── 그래프 빌드 ───────────────────────────────────────────
     graph = build_graph(preset=preset)  # type: ignore[arg-type]

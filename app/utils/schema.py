@@ -48,6 +48,7 @@ class LanggraphJson:
     graphs: list[GraphConfig] = field(default_factory=list)
 
     # 선택
+    preset: str = "custom"
     type: str = "service"
     description: str = ""
     dependencies: list[str] = field(default_factory=list)

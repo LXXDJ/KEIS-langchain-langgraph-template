@@ -36,6 +36,7 @@ def load_langgraph_config(
         name=raw.get("name", "default"),
         version=raw.get("version", "v0"),
         graphs=graphs,
+        preset=raw.get("preset", "custom"),
         type=raw.get("type", "service"),
         description=raw.get("description", ""),
         dependencies=raw.get("dependencies", []),
