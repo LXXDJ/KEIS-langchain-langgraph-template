@@ -2,8 +2,6 @@
 
 create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용하는 패턴입니다.
 agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
-스킬 도구(list_skills, read_skill)가 기본 포함되어 에이전트가
-SKILL.md를 탐색·읽고, 지침에 따라 작업을 수행할 수 있습니다.
 
 사용법:
     custom.py의 build_custom()에서 worker_type="chat"을 지정합니다.
@@ -18,7 +16,14 @@ from typing import Any
 from langchain.agents import create_agent
 
 from agents.state import State
-from agents.tools import get_current_time, list_skills, read_skill, search_database
+from agents.tools import get_current_time, search_database
+
+# ── 스킬 도구 (선택적) ──────────────────────────────────────
+# 스킬 도구가 불필요하면 아래 import와 _SKILL_TOOLS를 제거하세요.
+
+from agents.tools import list_skills, read_skill
+
+_SKILL_TOOLS: list[Any] = [list_skills, read_skill]
 
 
 # ── Worker 노드 ──────────────────────────────────────────────
@@ -29,20 +34,19 @@ async def worker_chat(state: State, **kwargs: Any) -> dict[str, Any]:
 
     특징:
     - @tool로 정의한 커스텀 도구를 에이전트에 전달
-    - list_skills, read_skill 스킬 도구가 기본 포함
     - system_prompt로 에이전트의 역할 지정
     - middleware로 운영 정책 적용 가능 (요약, fallback 등)
 
-    Note:
-        이 노드는 보일러플레이트 예시이므로 스킬 도구를 항상 포함합니다.
+    스킬 도구 포함 여부:
+        모듈 상단의 ``_SKILL_TOOLS`` 리스트로 제어합니다.
+        스킬이 불필요하면 빈 리스트로 변경하세요.
         preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
-        실제 서비스에서는 필요에 따라 도구 목록을 조정하세요.
     """
     messages = state.get("messages", [])
 
     agent = create_agent(
         model="openai:gpt-4o-mini",
-        tools=[get_current_time, search_database, list_skills, read_skill],
+        tools=[get_current_time, search_database, *_SKILL_TOOLS],
         system_prompt=(
             "당신은 데이터 분석 어시스턴트입니다. "
             "사용자의 질문에 도구를 활용하여 정확하게 답변하세요. "

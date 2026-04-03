@@ -30,8 +30,10 @@ from agents.tools.skills import (
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache() -> None:
-    """매 테스트마다 스킬 스캔 캐시를 초기화합니다."""
+def _clear_cache():
+    """매 테스트 전후 스킬 스캔 캐시를 초기화합니다."""
+    _invalidate_cache()
+    yield
     _invalidate_cache()
 
 
@@ -151,8 +153,17 @@ class TestScanSkills:
         skills = _scan_skills(str(skills_dir))
         for s in skills:
             assert isinstance(s, _SkillMeta)
-            assert s.path  # 상대경로
+            assert s.path  # 디렉토리명
             assert Path(s._absolute_path).is_absolute()  # noqa: SLF001
+
+    def test_scan_ignores_nested_skill_md(self, skills_dir: Path) -> None:
+        """1단계 깊이만 인식하고, 중첩된 SKILL.md는 무시합니다."""
+        nested = skills_dir / "alpha" / "examples"
+        nested.mkdir()
+        (nested / "SKILL.md").write_text("---\nname: nested\n---\n")
+        skills = _scan_skills(str(skills_dir))
+        names = {s.name for s in skills}
+        assert "nested" not in names
 
     def test_scan_empty_dir(self, empty_skills_dir: Path) -> None:
         skills = _scan_skills(str(empty_skills_dir))

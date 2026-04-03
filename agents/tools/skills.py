@@ -39,6 +39,10 @@ class _SkillMeta:
     path: str
     _absolute_path: str = field(repr=False)
 
+    def read_content(self) -> str:
+        """SKILL.md 파일 전체 내용을 반환합니다."""
+        return Path(self._absolute_path).read_text(encoding="utf-8")
+
 
 # ── SKILL.md frontmatter 파싱 ──────────────────────────────────
 
@@ -79,6 +83,8 @@ def _parse_frontmatter(content: str) -> dict[str, str]:
 
 _TTL_SECONDS = 60
 _cache: tuple[float, str, list[_SkillMeta]] | None = None
+# NOTE: 현재 asyncio 단일 스레드 환경을 전제합니다.
+# 멀티스레드 워커(gunicorn 등) 도입 시 threading.Lock 추가를 검토하세요.
 
 
 def _invalidate_cache() -> None:
@@ -93,7 +99,8 @@ def _invalidate_cache() -> None:
 def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
     """스킬 디렉토리를 스캔하여 메타데이터 목록을 반환합니다.
 
-    ``_`` 접두사 디렉토리(__pycache__, _resolver 등)는 건너뜁니다.
+    ``skills/{skill-name}/SKILL.md`` 구조(1단계 깊이)만 인식합니다.
+    ``_`` 접두사 디렉토리(__pycache__ 등)는 건너뜁니다.
     개별 스킬 파일 읽기 실패 시 해당 스킬만 건너뜁니다.
     symlink로 root 밖을 가리키는 경로는 건너뜁니다.
 
@@ -114,18 +121,17 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
     if not root.is_dir():
         return []
 
-    resolved_root = root.resolve()
     skills: list[_SkillMeta] = []
 
-    for skill_md in sorted(root.rglob("SKILL.md")):
-        # _접두사 디렉토리(Python 내부 파일) 하위는 스킬이 아님
-        rel = skill_md.relative_to(root)
-        if any(part.startswith("_") for part in rel.parts):
+    # 1단계 깊이만 탐색: skills/{skill-name}/SKILL.md
+    for skill_md in sorted(root.glob("*/SKILL.md")):
+        # _접두사 디렉토리(__pycache__ 등)는 스킬이 아님
+        if skill_md.parent.name.startswith("_"):
             continue
 
         # symlink 등으로 root 밖을 가리키는 경우 건너뜀
         try:
-            skill_md.resolve().relative_to(resolved_root)
+            skill_md.resolve().relative_to(root.resolve())
         except ValueError:
             continue
 
@@ -138,7 +144,7 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
         skills.append(_SkillMeta(
             name=meta.get("name", skill_md.parent.name),
             description=meta.get("description", "(설명 없음)"),
-            path=str(skill_md.parent.relative_to(root)),
+            path=skill_md.parent.name,
             _absolute_path=str(skill_md),
         ))
 
@@ -179,9 +185,9 @@ def read_skill(skill_name: str) -> str:
     skills = _scan_skills()
     for s in skills:
         if s.name == skill_name:
-            skill_path = Path(s._absolute_path)  # noqa: SLF001
+            skill_path = Path(s._absolute_path)
             if skill_path.is_file():
-                return skill_path.read_text(encoding="utf-8")
+                return s.read_content()
             return f"스킬 파일을 찾을 수 없습니다: {skill_path}"
 
     available = ", ".join(s.name for s in skills) or "(없음)"

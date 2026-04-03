@@ -4,8 +4,6 @@ create_deep_agent()로 만든 리서치 에이전트를 서브에이전트로 �
 planning, filesystem, subagent, summarization 미들웨어가 자동 구성되어,
 복잡한 질문에 대해 계획을 세우고 단계별로 처리합니다.
 agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
-스킬 도구(list_skills, read_skill)가 기본 포함되어 에이전트가
-SKILL.md를 탐색·읽고, 지침에 따라 작업을 수행할 수 있습니다.
 
 사용법:
     custom.py의 build_custom()에서 worker_type="deep"을 지정합니다.
@@ -21,7 +19,14 @@ from deepagents import create_deep_agent
 
 from agents.backends import create_filesystem_backend
 from agents.state import State
-from agents.tools import list_skills, read_document, read_skill, search_web
+from agents.tools import read_document, search_web
+
+# ── 스킬 도구 (선택적) ──────────────────────────────────────
+# 스킬 도구가 불필요하면 아래 import와 _SKILL_TOOLS를 제거하세요.
+
+from agents.tools import list_skills, read_skill
+
+_SKILL_TOOLS: list[Any] = [list_skills, read_skill]
 
 
 # ── Worker 노드 ──────────────────────────────────────────────
@@ -35,13 +40,13 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
     - subagent: 하위 작업을 서브에이전트에게 위임
     - summarization: 결과를 요약하여 최종 응답 생성
     - filesystem: 가상 파일시스템으로 중간 결과 관리
-    - list_skills, read_skill 스킬 도구가 기본 포함
+
+    스킬 도구 포함 여부:
+        모듈 상단의 ``_SKILL_TOOLS`` 리스트로 제어합니다.
+        스킬이 불필요하면 빈 리스트로 변경하세요.
+        preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
 
     Note:
-        이 노드는 보일러플레이트 예시이므로 스킬 도구를 항상 포함합니다.
-        preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
-        실제 서비스에서는 필요에 따라 도구 목록을 조정하세요.
-
         에이전트를 매 호출마다 생성합니다. API 서빙 환경(SSE 등)에서
         동시 요청 간 백엔드 상태 격리를 보장하기 위한 의도적 설계입니다.
     """
@@ -49,7 +54,7 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
 
     agent = create_deep_agent(
         model="openai:gpt-4o-mini",
-        tools=[search_web, read_document, list_skills, read_skill],
+        tools=[search_web, read_document, *_SKILL_TOOLS],
         backend=create_filesystem_backend(),
         system_prompt=(
             "당신은 심층 리서치 에이전트입니다. "
