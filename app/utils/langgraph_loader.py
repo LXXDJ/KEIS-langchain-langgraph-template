@@ -64,10 +64,13 @@ def load_langgraph_config(
 
 
 def load_graph(graph_path: str) -> Any:
-    """``module_path:attribute`` 형식의 경로에서 그래프 객체를 동적 로드합니다.
+    """``file_path:attribute`` 형식의 경로에서 그래프 객체를 동적 로드합니다.
+
+    파일 경로(``.py`` 확장자)는 프로젝트 루트 기준 상대경로로 해석됩니다.
+    모듈 경로(확장자 없음)는 ``importlib.import_module``로 로드합니다.
 
     Args:
-        graph_path: ``./src/graph.py:graph`` 형식의 경로.
+        graph_path: ``./src/graph.py:graph`` 또는 ``agents.graph_builder:build_graph`` 형식.
 
     Returns:
         로드된 그래프 객체 (CompiledStateGraph).
@@ -76,15 +79,32 @@ def load_graph(graph_path: str) -> Any:
         ValueError: 경로 형식이 잘못된 경우.
         ImportError: 모듈을 찾을 수 없는 경우.
         AttributeError: 모듈에 해당 속성이 없는 경우.
+        FileNotFoundError: 파일 경로를 찾을 수 없는 경우.
     """
     if ":" not in graph_path:
         raise ValueError(
             f"그래프 경로 형식이 잘못되었습니다: '{graph_path}'. "
-            "'module_path:attribute' 형식이어야 합니다 (예: ./src/graph.py:graph)."
+            "'file_path:attribute' 형식이어야 합니다 (예: ./src/graph.py:graph)."
         )
 
     module_path, attr_name = graph_path.rsplit(":", 1)
-    module_name = module_path.lstrip("./").replace("/", ".").removesuffix(".py")
 
-    module = importlib.import_module(module_name)
+    if module_path.endswith(".py"):
+        # 파일 경로 — 프로젝트 루트 기준으로 해석
+        file_path = Path(module_path)
+        if not file_path.is_absolute():
+            root = _find_project_root()
+            if root:
+                file_path = root / file_path
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"그래프 모듈 파일을 찾을 수 없습니다: {file_path}")
+
+        spec = importlib.util.spec_from_file_location("_graph_module", file_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+    else:
+        # 모듈 경로 — import_module로 로드
+        module = importlib.import_module(module_path)
+
     return getattr(module, attr_name)
