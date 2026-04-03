@@ -4,9 +4,9 @@ create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용�
 agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
 
 사용법:
-    custom.py의 build_custom()에서 worker_type="chat"을 지정합니다.
+    custom.py에서 이 모듈을 worker로 import합니다::
 
-    build_custom(worker_type="chat")
+        from agents.nodes import worker_chat as worker
 """
 
 from __future__ import annotations

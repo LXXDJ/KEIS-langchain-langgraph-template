@@ -41,8 +41,7 @@ src/agents/
 
 1. `src/agents/nodes/worker_{name}.py` 로 생성
 2. `src/agents/nodes/__init__.py` 에 export
-3. `src/agents/presets/custom.py` 의 `_WORKER_MAP`에 등록
-4. `WorkerType` Literal에 키 추가
+3. custom preset에서 사용하려면 `custom.py`의 worker import를 교체
 
 ### 도구(@tool)
 

@@ -16,7 +16,7 @@ langchain-deep-agent-template/
 │     ├─ state.py              # State 정의 (messages 기반 Input/Internal/Output/Context)
 │     ├─ registry.py           # preset 메타 정보
 │     ├─ presets/
-│     │  ├─ custom.py          # 수동 StateGraph 노드 조합 (worker_type으로 worker 선택)
+│     │  ├─ custom.py          # 수동 StateGraph 노드 조합
 │     │  ├─ chat.py            # create_agent() 기반
 │     │  └─ deep_research.py   # create_deep_agent() 기반
 │     └─ nodes/
@@ -84,7 +84,7 @@ curl -X POST http://localhost:8000/agent/invoke \
 
 | preset | 팩토리 | 설명 |
 |--------|--------|------|
-| `custom` (기본) | 수동 StateGraph | preprocess → worker → postprocessor 파이프라인. `worker_type`으로 worker 구현체 선택 |
+| `custom` (기본) | 수동 StateGraph | preprocess → worker → postprocessor 파이프라인. 노드를 직접 조합 |
 | `chat` | `langchain.agents.create_agent()` | 대화형 에이전트. 미들웨어, response_format 등 내장 기능 활용 |
 | `deep_research` | `deepagents.create_deep_agent()` | planning, filesystem, subagent, summarization 미들웨어 자동 구성 |
 
@@ -103,27 +103,22 @@ graph = build_graph("chat", model="openai:gpt-4o")
 graph = build_graph("deep_research", model="openai:gpt-4o")
 ```
 
-## Custom Preset — Worker 선택
+## Custom Preset — Worker 교체
 
-custom preset은 `worker_type` 파라미터로 worker 구현체를 선택합니다:
+custom preset은 기본적으로 LLM 없이 테스트용 worker를 사용합니다.
+다른 worker를 사용하려면 `src/agents/presets/custom.py`의 import를 교체하세요:
 
-| worker_type | 파일 | 설명 |
+| worker 모듈 | 파일 | 설명 |
 |-------------|------|------|
-| `"default"` | `worker.py` | LLM 없이 테스트용. 입력을 그대로 반환 |
-| `"chat"` | `worker_chat.py` | `create_agent()` + `@tool`로 대화형 서브에이전트 |
-| `"deep"` | `worker_deep.py` | `create_deep_agent()` + `@tool`로 리서치 서브에이전트 |
+| `worker` (기본) | `worker.py` | LLM 없이 테스트용. 입력을 그대로 반환 |
+| `worker_chat` | `worker_chat.py` | `create_agent()` + `@tool`로 대화형 서브에이전트 |
+| `worker_deep` | `worker_deep.py` | `create_deep_agent()` + `@tool`로 리서치 서브에이전트 |
 
 ```python
-from agents.presets.custom import build_custom
-
-# 기본 테스트 worker
-graph = build_custom(worker_type="default")
-
-# create_agent() 기반 worker
-graph = build_custom(worker_type="chat")
-
-# create_deep_agent() 기반 worker
-graph = build_custom(worker_type="deep")
+# src/agents/presets/custom.py에서 import 교체
+from agents.nodes import worker_chat as worker  # create_agent() 기반
+# 또는
+from agents.nodes import worker_deep as worker  # create_deep_agent() 기반
 ```
 
 ### 노드 안에서 create_agent() 사용
