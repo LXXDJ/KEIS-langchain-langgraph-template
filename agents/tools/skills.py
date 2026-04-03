@@ -33,23 +33,27 @@ _MAX_SKILL_BYTES = 64 * 1024
 
 @dataclass(frozen=True)
 class _SkillMeta:
-    """스킬 메타데이터. 공개 정보와 내부 경로를 분리합니다."""
+    """스킬 메타데이터. 공개 정보와 스킬 디렉토리 기준 경로를 관리합니다."""
 
     name: str
     description: str
     path: str
-    _absolute_path: str = field(repr=False)
+    _skills_dir: str = field(repr=False)
+
+    @property
+    def _skill_md_path(self) -> Path:
+        return Path(self._skills_dir) / self.path / "SKILL.md"
 
     def exists(self) -> bool:
         """SKILL.md 파일이 존재하는지 확인합니다."""
-        return Path(self._absolute_path).is_file()
+        return self._skill_md_path.is_file()
 
     def read_content(self) -> str:
         """SKILL.md 파일 전체 내용을 반환합니다.
 
         64KB를 초과하면 경고 로그를 남깁니다.
         """
-        content = Path(self._absolute_path).read_text(encoding="utf-8")
+        content = self._skill_md_path.read_text(encoding="utf-8")
         if len(content.encode()) > _MAX_SKILL_BYTES:
             _log.warning(
                 "SKILL.md가 %d bytes를 초과합니다: %s",
@@ -155,7 +159,7 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
             name=meta.get("name", skill_md.parent.name),
             description=meta.get("description", "(설명 없음)"),
             path=skill_md.parent.name,
-            _absolute_path=str(skill_md),
+            _skills_dir=resolved_dir,
         ))
 
     # 캐시 저장 — 기본 경로일 때만

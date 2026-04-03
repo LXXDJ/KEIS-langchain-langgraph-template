@@ -154,7 +154,7 @@ class TestScanSkills:
         for s in skills:
             assert isinstance(s, _SkillMeta)
             assert s.path  # 디렉토리명
-            assert Path(s._absolute_path).is_absolute()  # noqa: SLF001
+            assert s.exists()  # SKILL.md 파일 존재 확인
 
     def test_scan_ignores_nested_skill_md(self, skills_dir: Path) -> None:
         """glob("*/SKILL.md")로 1단계 깊이만 인식하고, 중첩된 SKILL.md는 무시합니다."""
