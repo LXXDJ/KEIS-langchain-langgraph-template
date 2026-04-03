@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from agents import build_graph, list_presets
 from app.utils.langgraph_loader import load_graph, load_langgraph_config
 
+_log = logging.getLogger(__name__)
+
 # ── 상수 ─────────────────────────────────────────────────────
 
 _PRESET_DEEP_RESEARCH = "deep_research"
@@ -60,7 +62,6 @@ def create_app() -> FastAPI:
     graph_config = config.graphs[0] if config and config.graphs else None
 
     if config and len(config.graphs) > 1:
-        _log = logging.getLogger(__name__)
         _log.warning(
             "langgraph.json에 %d개의 그래프가 정의되었지만, 첫 번째만 사용합니다: %s",
             len(config.graphs), graph_config.name if graph_config else "N/A",

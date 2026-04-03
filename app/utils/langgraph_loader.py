@@ -10,15 +10,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-_log = logging.getLogger(__name__)
-
 from app.utils.schema import GraphConfig, LanggraphJson, Maintainer
+
+_log = logging.getLogger(__name__)
 
 _ROOT_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg")
 
 
 def _find_project_root(start: Path | None = None) -> Path | None:
-    """프로젝트 루트 마커 파일을 기준으로 루트 디렉토리를 탐색합니다."""
+    """프로젝트 루트 마커 파일을 기준으로 루트 디렉토리를 탐색합니다.
+
+    NOTE: agents._utils.find_project_root()와 유사하지만,
+    app ↔ agents 간 의존성 분리를 위해 독립 구현합니다.
+    """
     current = (start or Path(__file__)).resolve().parent
     for parent in (current, *current.parents):
         if any((parent / marker).exists() for marker in _ROOT_MARKERS):
@@ -68,7 +72,7 @@ def load_langgraph_config(
     )
 
 
-def load_graph(graph_path: str) -> Any:
+def load_graph(graph_path: str) -> Any:  # -> CompiledStateGraph at runtime
     """``file_path:attribute`` 형식의 경로에서 그래프 객체를 동적 로드합니다.
 
     파일 경로(``.py`` 확장자)는 프로젝트 루트 기준 상대경로로 해석됩니다.
@@ -105,11 +109,12 @@ def load_graph(graph_path: str) -> Any:
         if not file_path.exists():
             raise FileNotFoundError(f"그래프 모듈 파일을 찾을 수 없습니다: {file_path}")
 
-        spec = importlib.util.spec_from_file_location("_graph_module", file_path)
+        module_name = f"_graph_{file_path.stem}_{abs(hash(str(file_path.resolve())))}"
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
         if spec is None or spec.loader is None:
             raise ImportError(f"그래프 모듈 스펙을 로드할 수 없습니다: {file_path}")
         module = importlib.util.module_from_spec(spec)
-        sys.modules["_graph_module"] = module
+        sys.modules[module_name] = module
         spec.loader.exec_module(module)
     else:
         # 모듈 경로 — import_module로 로드
