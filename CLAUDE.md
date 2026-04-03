@@ -26,6 +26,7 @@ agents/              # 에이전트 구현 (그래프, 노드, 상태, 프리셋
   ├─ skills/         # Deep Agents 스킬 (재사용 가능한 능력 단위)
   ├─ backends/       # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
   ├─ middlewares/    # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
+  ├─ _utils.py       # 패키지 내부 공통 유틸 (find_project_root 등)
   ├─ state.py        # State 정의 (이 파일 하나에서만 관리)
   └─ registry.py     # preset 메타 정보
 app/                 # 서빙 레이어 (FastAPI + LangServe)

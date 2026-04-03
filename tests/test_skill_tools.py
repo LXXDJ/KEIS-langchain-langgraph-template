@@ -109,6 +109,14 @@ class TestParseFrontmatter:
         meta = _parse_frontmatter(content)
         assert meta["description"] == "이것은: 콜론이 포함된 설명"
 
+    def test_unclosed_frontmatter(self) -> None:
+        """닫는 --- 없이 시작만 된 frontmatter는 전체 본문을 파싱합니다."""
+        content = "---\nname: broken\n# This is body\nnot: metadata"
+        meta = _parse_frontmatter(content)
+        # 닫는 ---가 없으면 모든 key:value 라인을 메타데이터로 인식
+        assert meta["name"] == "broken"
+        assert "not" in meta
+
 
 # ── _scan_skills ───────────────────────────────────────────────
 
@@ -125,6 +133,8 @@ class TestScanSkills:
         skills = _scan_skills(str(skills_dir))
         for s in skills:
             assert "path" in s
+            assert "_absolute_path" in s
+            assert Path(s["_absolute_path"]).is_absolute()
 
     def test_scan_empty_dir(self, empty_skills_dir: Path) -> None:
         skills = _scan_skills(str(empty_skills_dir))
@@ -164,7 +174,7 @@ class TestListSkills:
     ) -> None:
         monkeypatch.setenv("AGENT_SKILLS_DIR", str(skills_dir))
         result = list_skills.invoke({})
-        assert "(설명 없음)" in result or "beta" in result
+        assert "(설명 없음)" in result
 
     def test_empty_dir(self, empty_skills_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AGENT_SKILLS_DIR", str(empty_skills_dir))

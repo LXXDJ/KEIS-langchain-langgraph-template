@@ -50,6 +50,11 @@ def _scan_skills(skills_dir: str | None = None) -> list[dict[str, str]]:
     """스킬 디렉토리를 스캔하여 frontmatter 목록을 반환합니다.
 
     ``_`` 접두사 디렉토리(__pycache__, _resolver 등)는 건너뜁니다.
+    개별 스킬 파일 읽기 실패 시 해당 스킬만 건너뜁니다.
+
+    Note:
+        매 호출마다 파일시스템을 스캔합니다. 스킬 수가 많아지면
+        ``functools.lru_cache`` 또는 TTL 캐시 도입을 검토하세요.
     """
     root = Path(resolve_skills_dir(skills_dir))
     if not root.is_dir():
@@ -62,11 +67,16 @@ def _scan_skills(skills_dir: str | None = None) -> list[dict[str, str]]:
         if any(part.startswith("_") for part in rel.parts):
             continue
 
-        content = skill_md.read_text(encoding="utf-8")
+        try:
+            content = skill_md.read_text(encoding="utf-8")
+        except OSError:
+            continue  # 해당 스킬만 건너뜀
+
         meta = _parse_frontmatter(content)
         if "name" not in meta:
             meta["name"] = skill_md.parent.name
         meta["path"] = str(skill_md.parent.relative_to(root))
+        meta["_absolute_path"] = str(skill_md)
         skills.append(meta)
     return skills
 
@@ -103,7 +113,7 @@ def read_skill(skill_name: str) -> str:
     skills = _scan_skills()
     for s in skills:
         if s.get("name") == skill_name:
-            skill_path = Path(resolve_skills_dir()) / s["path"] / "SKILL.md"
+            skill_path = Path(s["_absolute_path"])
             if skill_path.is_file():
                 return skill_path.read_text(encoding="utf-8")
             return f"스킬 파일을 찾을 수 없습니다: {skill_path}"

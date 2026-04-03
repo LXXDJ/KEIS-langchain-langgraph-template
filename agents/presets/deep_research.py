@@ -20,7 +20,7 @@ def build_deep_research(
     subagents: list[Any] | None = None,
     skills: list[str] | None = None,
     memory: list[str] | None = None,
-    include_skill_tools: bool = True,
+    include_skill_tools: bool = False,
     name: str | None = "deep_research",
     **kwargs: Any,
 ) -> CompiledStateGraph:
@@ -43,7 +43,7 @@ def build_deep_research(
                 build_deep_research(backend=create_composite_backend())
                 build_deep_research(backend=create_store_backend())
         include_skill_tools: True이면 list_skills, read_skill 도구를
-            자동으로 tools에 추가합니다.
+            자동으로 tools에 추가합니다. 기본값 False (opt-in).
             네이티브 skills 파라미터와 독립적으로 동작하므로,
             도구 기반 스킬과 네이티브 스킬을 함께 사용할 수 있습니다.
     """

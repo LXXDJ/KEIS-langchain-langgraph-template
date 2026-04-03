@@ -14,7 +14,7 @@ def build_chat(
     tools: Sequence[Any] | None = None,
     system_prompt: str | None = None,
     middleware: Sequence[Any] = (),
-    include_skill_tools: bool = True,
+    include_skill_tools: bool = False,
     name: str | None = "chat",
     **kwargs: Any,
 ) -> CompiledStateGraph:
@@ -30,7 +30,7 @@ def build_chat(
                 build_chat(tools=[get_current_time, search_database])
 
         include_skill_tools: True이면 list_skills, read_skill 도구를
-            자동으로 tools에 추가합니다. 스킬이 불필요하면 False로 끕니다.
+            자동으로 tools에 추가합니다. 기본값 False (opt-in).
     """
     from langchain.agents import create_agent
 
