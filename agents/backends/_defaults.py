@@ -5,21 +5,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from agents._utils import find_project_root
+
 _OUTPUT_DIR_NAME = "outputs"
 _ENV_KEY = "AGENT_OUTPUT_DIR"
-
-
-def _find_project_root() -> Path:
-    """langgraph.json이 위치한 디렉토리를 프로젝트 루트로 결정합니다.
-
-    현재 디렉토리에서 상위로 올라가며 langgraph.json을 탐색합니다.
-    찾지 못하면 CWD를 반환합니다.
-    """
-    current = Path.cwd().resolve()
-    for parent in (current, *current.parents):
-        if (parent / "langgraph.json").exists():
-            return parent
-    return current
 
 
 def resolve_output_dir(root_dir: str | None = None) -> str:
@@ -38,7 +27,7 @@ def resolve_output_dir(root_dir: str | None = None) -> str:
     elif env := os.getenv(_ENV_KEY):
         path = Path(env)
     else:
-        path = _find_project_root() / _OUTPUT_DIR_NAME
+        path = find_project_root() / _OUTPUT_DIR_NAME
 
     return str(path)
 
