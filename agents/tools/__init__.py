@@ -4,9 +4,14 @@
 worker 전용 도구는 해당 worker 파일 안에 정의하세요.
 
 사용법:
-    from agents.tools import my_tool
+    from agents.tools import list_skills, read_skill
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from agents.tools.skills import list_skills, read_skill
+
+__all__: list[str] = [
+    "list_skills",
+    "read_skill",
+]
