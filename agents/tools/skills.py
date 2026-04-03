@@ -16,11 +16,29 @@ Progressive disclosure 패턴으로 동작합니다:
 
 from __future__ import annotations
 
+import logging
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from langchain_core.tools import tool
 
 from agents.skills._resolver import resolve_skills_dir
+
+_log = logging.getLogger(__name__)
+
+# ── 스킬 메타데이터 ──────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class _SkillMeta:
+    """스킬 메타데이터. 공개 정보와 내부 경로를 분리합니다."""
+
+    name: str
+    description: str
+    path: str
+    _absolute_path: str = field(repr=False)
+
 
 # ── SKILL.md frontmatter 파싱 ──────────────────────────────────
 
@@ -30,41 +48,85 @@ def _parse_frontmatter(content: str) -> dict[str, str]:
 
     ``---`` 로 감싼 블록에서 ``key: value`` 쌍을 추출합니다.
     외부 YAML 라이브러리 없이 경량 파싱합니다.
+    닫는 ``---`` 가 없으면 경고 로그를 남깁니다.
     """
     lines = content.split("\n")
     if not lines or lines[0].strip() != "---":
         return {}
 
     meta: dict[str, str] = {}
+    closed = False
     for line in lines[1:]:
         stripped = line.strip()
         if stripped == "---":
+            closed = True
             break
         if ":" in stripped:
             key, _, value = stripped.partition(":")
             meta[key.strip()] = value.strip()
+
+    if not closed and meta:
+        _log.warning(
+            "frontmatter가 닫히지 않았습니다: "
+            "일부 내용이 메타데이터로 파싱될 수 있습니다. keys=%s",
+            list(meta),
+        )
+
     return meta
 
 
-def _scan_skills(skills_dir: str | None = None) -> list[dict[str, str]]:
-    """스킬 디렉토리를 스캔하여 frontmatter 목록을 반환합니다.
+# ── TTL 캐시 ─────────────────────────────────────────────────
+
+_TTL_SECONDS = 60
+_cache: tuple[float, str, list[_SkillMeta]] | None = None
+
+
+def _invalidate_cache() -> None:
+    """테스트 등에서 캐시를 수동으로 초기화합니다."""
+    global _cache  # noqa: PLW0603
+    _cache = None
+
+
+# ── 스킬 스캔 ────────────────────────────────────────────────
+
+
+def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
+    """스킬 디렉토리를 스캔하여 메타데이터 목록을 반환합니다.
 
     ``_`` 접두사 디렉토리(__pycache__, _resolver 등)는 건너뜁니다.
     개별 스킬 파일 읽기 실패 시 해당 스킬만 건너뜁니다.
+    symlink로 root 밖을 가리키는 경로는 건너뜁니다.
 
-    Note:
-        매 호출마다 파일시스템을 스캔합니다. 스킬 수가 많아지면
-        ``functools.lru_cache`` 또는 TTL 캐시 도입을 검토하세요.
+    기본 경로(skills_dir=None)로 호출 시 결과를 60초간 캐싱합니다.
     """
-    root = Path(resolve_skills_dir(skills_dir))
+    global _cache  # noqa: PLW0603
+
+    resolved_dir = resolve_skills_dir(skills_dir)
+
+    # TTL 캐시 — 기본 경로일 때만 적용
+    now = time.monotonic()
+    if skills_dir is None and _cache is not None:
+        cached_time, cached_dir, cached_result = _cache
+        if cached_dir == resolved_dir and now - cached_time < _TTL_SECONDS:
+            return cached_result
+
+    root = Path(resolved_dir)
     if not root.is_dir():
         return []
 
-    skills: list[dict[str, str]] = []
+    resolved_root = root.resolve()
+    skills: list[_SkillMeta] = []
+
     for skill_md in sorted(root.rglob("SKILL.md")):
         # _접두사 디렉토리(Python 내부 파일) 하위는 스킬이 아님
         rel = skill_md.relative_to(root)
         if any(part.startswith("_") for part in rel.parts):
+            continue
+
+        # symlink 등으로 root 밖을 가리키는 경우 건너뜀
+        try:
+            skill_md.resolve().relative_to(resolved_root)
+        except ValueError:
             continue
 
         try:
@@ -73,11 +135,17 @@ def _scan_skills(skills_dir: str | None = None) -> list[dict[str, str]]:
             continue  # 해당 스킬만 건너뜀
 
         meta = _parse_frontmatter(content)
-        if "name" not in meta:
-            meta["name"] = skill_md.parent.name
-        meta["path"] = str(skill_md.parent.relative_to(root))
-        meta["_absolute_path"] = str(skill_md)
-        skills.append(meta)
+        skills.append(_SkillMeta(
+            name=meta.get("name", skill_md.parent.name),
+            description=meta.get("description", "(설명 없음)"),
+            path=str(skill_md.parent.relative_to(root)),
+            _absolute_path=str(skill_md),
+        ))
+
+    # 캐시 저장 — 기본 경로일 때만
+    if skills_dir is None:
+        _cache = (now, resolved_dir, skills)
+
     return skills
 
 
@@ -97,9 +165,7 @@ def list_skills() -> str:
 
     lines: list[str] = []
     for s in skills:
-        name = s.get("name", "unknown")
-        desc = s.get("description", "(설명 없음)")
-        lines.append(f"- {name}: {desc}")
+        lines.append(f"- {s.name}: {s.description}")
     return "\n".join(lines)
 
 
@@ -112,11 +178,11 @@ def read_skill(skill_name: str) -> str:
     """
     skills = _scan_skills()
     for s in skills:
-        if s.get("name") == skill_name:
-            skill_path = Path(s["_absolute_path"])
+        if s.name == skill_name:
+            skill_path = Path(s._absolute_path)  # noqa: SLF001
             if skill_path.is_file():
                 return skill_path.read_text(encoding="utf-8")
             return f"스킬 파일을 찾을 수 없습니다: {skill_path}"
 
-    available = ", ".join(s.get("name", "?") for s in skills) or "(없음)"
+    available = ", ".join(s.name for s in skills) or "(없음)"
     return f"'{skill_name}' 스킬을 찾을 수 없습니다. 사용 가능: {available}"

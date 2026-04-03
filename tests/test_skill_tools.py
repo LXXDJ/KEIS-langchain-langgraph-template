@@ -2,7 +2,7 @@
 
 검증 항목
 ---------
-1. resolve_skills_dir — 경로 해석 우선순위 (인자 > 환경변수 > 프로젝트 루트)
+1. resolve_skills_dir — 경로 해석 우선순위 (인자 > 환경변수 > langgraph.json 기준)
 2. _parse_frontmatter — YAML frontmatter 파싱
 3. _scan_skills — 디렉토리 스캔 및 메타데이터 수집
 4. list_skills — 스킬 목록 조회 (도구 호출)
@@ -16,35 +16,45 @@ from pathlib import Path
 import pytest
 
 from agents.skills._resolver import resolve_skills_dir
-from agents.tools.skills import _parse_frontmatter, _scan_skills, list_skills, read_skill
+from agents.tools.skills import (
+    _SkillMeta,
+    _invalidate_cache,
+    _parse_frontmatter,
+    _scan_skills,
+    list_skills,
+    read_skill,
+)
 
 
 # ── 픽스처 ─────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache() -> None:
+    """매 테스트마다 스킬 스캔 캐시를 초기화합니다."""
+    _invalidate_cache()
 
 
 @pytest.fixture()
 def skills_dir(tmp_path: Path) -> Path:
     """테스트용 스킬 디렉토리를 생성합니다."""
     # 스킬 A
-    skill_a = tmp_path / "alpha"
-    skill_a.mkdir()
-    (skill_a / "SKILL.md").write_text(
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "alpha" / "SKILL.md").write_text(
         "---\nname: alpha\ndescription: 알파 스킬입니다.\n---\n\n# Alpha\n\n상세 내용.",
         encoding="utf-8",
     )
 
     # 스킬 B (description 없음)
-    skill_b = tmp_path / "beta"
-    skill_b.mkdir()
-    (skill_b / "SKILL.md").write_text(
+    (tmp_path / "beta").mkdir()
+    (tmp_path / "beta" / "SKILL.md").write_text(
         "---\nname: beta\n---\n\n# Beta\n\n설명 없는 스킬.",
         encoding="utf-8",
     )
 
     # 스킬 C (frontmatter 없음 — name은 디렉토리명에서 유추)
-    skill_c = tmp_path / "gamma"
-    skill_c.mkdir()
-    (skill_c / "SKILL.md").write_text(
+    (tmp_path / "gamma").mkdir()
+    (tmp_path / "gamma" / "SKILL.md").write_text(
         "# Gamma\n\nfrontmatter가 없는 스킬.",
         encoding="utf-8",
     )
@@ -117,6 +127,13 @@ class TestParseFrontmatter:
         assert meta["name"] == "broken"
         assert "not" in meta
 
+    def test_unclosed_frontmatter_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        """닫는 --- 없으면 경고 로그가 남습니다."""
+        content = "---\nname: broken\n"
+        with caplog.at_level("WARNING"):
+            _parse_frontmatter(content)
+        assert "닫히지 않았습니다" in caplog.text
+
 
 # ── _scan_skills ───────────────────────────────────────────────
 
@@ -126,15 +143,16 @@ class TestScanSkills:
 
     def test_scan_finds_all(self, skills_dir: Path) -> None:
         skills = _scan_skills(str(skills_dir))
-        names = {s["name"] for s in skills}
+        names = {s.name for s in skills}
         assert names == {"alpha", "beta", "gamma"}
 
-    def test_scan_includes_path(self, skills_dir: Path) -> None:
+    def test_scan_returns_skill_meta(self, skills_dir: Path) -> None:
+        """스캔 결과가 _SkillMeta dataclass인지 검증합니다."""
         skills = _scan_skills(str(skills_dir))
         for s in skills:
-            assert "path" in s
-            assert "_absolute_path" in s
-            assert Path(s["_absolute_path"]).is_absolute()
+            assert isinstance(s, _SkillMeta)
+            assert s.path  # 상대경로
+            assert Path(s._absolute_path).is_absolute()  # noqa: SLF001
 
     def test_scan_empty_dir(self, empty_skills_dir: Path) -> None:
         skills = _scan_skills(str(empty_skills_dir))
@@ -147,8 +165,24 @@ class TestScanSkills:
     def test_no_frontmatter_uses_dirname(self, skills_dir: Path) -> None:
         """frontmatter에 name이 없으면 디렉토리명을 사용합니다."""
         skills = _scan_skills(str(skills_dir))
-        gamma = next(s for s in skills if s["name"] == "gamma")
-        assert gamma["path"] == "gamma"
+        gamma = next(s for s in skills if s.name == "gamma")
+        assert gamma.path == "gamma"
+
+    def test_scan_skips_underscore_dirs(self, skills_dir: Path) -> None:
+        """_접두사 디렉토리는 건너뜁니다."""
+        hidden = skills_dir / "_internal"
+        hidden.mkdir()
+        (hidden / "SKILL.md").write_text("---\nname: hidden\n---\n")
+        skills = _scan_skills(str(skills_dir))
+        names = {s.name for s in skills}
+        assert "hidden" not in names
+
+    def test_cache_reuses_result(self, skills_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """기본 경로 호출 시 캐시가 동작합니다."""
+        monkeypatch.setenv("AGENT_SKILLS_DIR", str(skills_dir))
+        first = _scan_skills()
+        second = _scan_skills()
+        assert first is second  # 동일 객체 (캐시)
 
 
 # ── list_skills (도구) ─────────────────────────────────────────

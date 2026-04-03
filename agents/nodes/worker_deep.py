@@ -38,6 +38,10 @@ async def worker_deep(state: State, **kwargs: Any) -> dict[str, Any]:
     - list_skills, read_skill 스킬 도구가 기본 포함
 
     Note:
+        이 노드는 보일러플레이트 예시이므로 스킬 도구를 항상 포함합니다.
+        preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
+        실제 서비스에서는 필요에 따라 도구 목록을 조정하세요.
+
         에이전트를 매 호출마다 생성합니다. API 서빙 환경(SSE 등)에서
         동시 요청 간 백엔드 상태 격리를 보장하기 위한 의도적 설계입니다.
     """

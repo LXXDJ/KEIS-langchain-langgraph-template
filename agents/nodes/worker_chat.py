@@ -32,6 +32,11 @@ async def worker_chat(state: State, **kwargs: Any) -> dict[str, Any]:
     - list_skills, read_skill 스킬 도구가 기본 포함
     - system_prompt로 에이전트의 역할 지정
     - middleware로 운영 정책 적용 가능 (요약, fallback 등)
+
+    Note:
+        이 노드는 보일러플레이트 예시이므로 스킬 도구를 항상 포함합니다.
+        preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
+        실제 서비스에서는 필요에 따라 도구 목록을 조정하세요.
     """
     messages = state.get("messages", [])
 
