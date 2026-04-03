@@ -3,6 +3,7 @@
 create_deep_agent()로 만든 리서치 에이전트를 서브에이전트로 사용하는 패턴입니다.
 planning, filesystem, subagent, summarization 미들웨어가 자동 구성되어,
 복잡한 질문에 대해 계획을 세우고 단계별로 처리합니다.
+agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
 스킬 도구(list_skills, read_skill)가 기본 포함되어 에이전트가
 SKILL.md를 탐색·읽고, 지침에 따라 작업을 수행할 수 있습니다.
 
@@ -17,27 +18,10 @@ from __future__ import annotations
 from typing import Any
 
 from deepagents import create_deep_agent
-from langchain.tools import tool
 
 from agents.backends import create_filesystem_backend
 from agents.state import State
-from agents.tools import list_skills, read_skill
-
-# ── 커스텀 도구 정의 ──────────────────────────────────────────
-
-
-@tool
-def search_web(query: str) -> str:
-    """웹에서 정보를 검색합니다."""
-    # 실제 서비스에서는 검색 API로 교체
-    return f"[웹 검색 결과] '{query}'에 대한 검색 결과: 샘플 데이터"
-
-
-@tool
-def read_document(path: str) -> str:
-    """문서를 읽어서 내용을 반환합니다."""
-    # 실제 서비스에서는 파일 시스템이나 S3 등에서 읽기
-    return f"[문서 내용] '{path}' 파일의 내용: 샘플 문서 텍스트"
+from agents.tools import list_skills, read_document, read_skill, search_web
 
 
 # ── Worker 노드 ──────────────────────────────────────────────

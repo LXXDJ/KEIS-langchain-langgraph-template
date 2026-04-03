@@ -1,7 +1,7 @@
 """Worker 노드 예시 — create_agent() 활용.
 
 create_agent()로 만든 대화형 에이전트를 서브에이전트로 사용하는 패턴입니다.
-커스텀 도구(@tool)를 붙여서 DB 조회, API 호출 등을 수행할 수 있습니다.
+agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
 스킬 도구(list_skills, read_skill)가 기본 포함되어 에이전트가
 SKILL.md를 탐색·읽고, 지침에 따라 작업을 수행할 수 있습니다.
 
@@ -16,27 +16,9 @@ from __future__ import annotations
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain.tools import tool
 
 from agents.state import State
-from agents.tools import list_skills, read_skill
-
-# ── 커스텀 도구 정의 ──────────────────────────────────────────
-
-
-@tool
-def get_current_time() -> str:
-    """현재 시간을 반환합니다."""
-    from datetime import datetime
-
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-@tool
-def search_database(query: str) -> str:
-    """데이터베이스에서 정보를 검색합니다."""
-    # 실제 서비스에서는 DB 쿼리로 교체
-    return f"[DB 검색 결과] '{query}'에 대한 결과: 샘플 데이터"
+from agents.tools import get_current_time, list_skills, read_skill, search_database
 
 
 # ── Worker 노드 ──────────────────────────────────────────────
