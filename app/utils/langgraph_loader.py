@@ -110,12 +110,21 @@ def load_graph(graph_path: str) -> Any:  # -> CompiledStateGraph at runtime
             raise FileNotFoundError(f"그래프 모듈 파일을 찾을 수 없습니다: {file_path}")
 
         module_name = f"_graph_{file_path.stem}_{abs(hash(str(file_path.resolve())))}"
-        spec = importlib.util.spec_from_file_location(module_name, file_path)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"그래프 모듈 스펙을 로드할 수 없습니다: {file_path}")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+
+        # 동일 경로에 대해 이미 로드된 모듈이 있으면 재사용
+        if module_name in sys.modules:
+            module = sys.modules[module_name]
+        else:
+            spec = importlib.util.spec_from_file_location(module_name, file_path)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"그래프 모듈 스펙을 로드할 수 없습니다: {file_path}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            try:
+                spec.loader.exec_module(module)
+            except Exception:
+                sys.modules.pop(module_name, None)
+                raise
     else:
         # 모듈 경로 — import_module로 로드
         module = importlib.import_module(module_path)
