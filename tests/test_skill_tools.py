@@ -124,15 +124,10 @@ class TestParseFrontmatter:
         assert meta["description"] == "이것은: 콜론이 포함된 설명"
 
     def test_unclosed_frontmatter(self) -> None:
-        """닫는 --- 없이 시작만 된 frontmatter는 전체 본문을 파싱합니다."""
+        """닫는 --- 없으면 빈 dict를 반환합니다 (본문 오파싱 방지)."""
         content = "---\nname: broken\n# This is body\nnot: metadata"
         meta = _parse_frontmatter(content)
-        # 닫는 ---가 없으면 모든 key:value 라인을 메타데이터로 인식
-        assert meta["name"] == "broken"
-        assert "not" in meta
-        # # 으로 시작하는 주석 라인은 무시
-        assert "#" not in meta
-        assert "# This is body" not in meta
+        assert meta == {}
 
     def test_unclosed_frontmatter_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """닫는 --- 없으면 경고 로그가 남습니다."""

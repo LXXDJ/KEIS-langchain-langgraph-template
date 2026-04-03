@@ -42,7 +42,7 @@ examples/            # preset별 사용 예시
 - 새 노드 → `agents/nodes/` 에 추가하고 `agents/nodes/__init__.py`에 export
 - 새 preset → `agents/presets/` 에 추가하고 `agents/presets/__init__.py`에 export, `agents/registry.py`에 메타 등록
 - 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `agents/tools/`
-- 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성
+- 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성 (64KB 이하 권장 — LLM 컨텍스트로 전달됨)
 - 새 백엔드 → `agents/backends/` 에 추가하고 `__init__.py`에 export
 - 새 미들웨어 → `agents/middlewares/` 에 추가하고 `__init__.py`에 export
 - 서빙 관련 유틸 → `app/utils/`

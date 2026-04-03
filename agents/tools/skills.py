@@ -66,31 +66,27 @@ def _parse_frontmatter(content: str) -> dict[str, str]:
 
     ``---`` 로 감싼 블록에서 ``key: value`` 쌍을 추출합니다.
     외부 YAML 라이브러리 없이 경량 파싱합니다.
-    닫는 ``---`` 가 없으면 경고 로그를 남깁니다.
+    닫는 ``---`` 가 없으면 경고 로그를 남기고 빈 dict를 반환합니다.
     """
     lines = content.split("\n")
     if not lines or lines[0].strip() != "---":
         return {}
 
     meta: dict[str, str] = {}
-    closed = False
     for line in lines[1:]:
         stripped = line.strip()
         if stripped == "---":
-            closed = True
-            break
+            return meta
         if ":" in stripped and not stripped.startswith("#"):
             key, _, value = stripped.partition(":")
             meta[key.strip()] = value.strip()
 
-    if not closed and meta:
-        _log.warning(
-            "frontmatter가 닫히지 않았습니다: "
-            "일부 내용이 메타데이터로 파싱될 수 있습니다. keys=%s",
-            list(meta),
-        )
-
-    return meta
+    # 닫는 ---가 없으면 본문이 메타데이터로 오파싱될 수 있으므로 빈 dict 반환
+    _log.warning(
+        "frontmatter가 닫히지 않았습니다 — 메타데이터를 무시합니다: %s",
+        list(meta),
+    )
+    return {}
 
 
 # ── TTL 캐시 ─────────────────────────────────────────────────
