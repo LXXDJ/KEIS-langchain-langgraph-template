@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from pathlib import Path
+from typing import Any
 
 from app.utils.schema import GraphConfig, LanggraphJson, Maintainer
 
@@ -59,3 +61,30 @@ def load_langgraph_config(
         commands=raw.get("commands", []),
         env=raw.get("env", {}),
     )
+
+
+def load_graph(graph_path: str) -> Any:
+    """``module_path:attribute`` 형식의 경로에서 그래프 객체를 동적 로드합니다.
+
+    Args:
+        graph_path: ``./src/graph.py:graph`` 형식의 경로.
+
+    Returns:
+        로드된 그래프 객체 (CompiledStateGraph).
+
+    Raises:
+        ValueError: 경로 형식이 잘못된 경우.
+        ImportError: 모듈을 찾을 수 없는 경우.
+        AttributeError: 모듈에 해당 속성이 없는 경우.
+    """
+    if ":" not in graph_path:
+        raise ValueError(
+            f"그래프 경로 형식이 잘못되었습니다: '{graph_path}'. "
+            "'module_path:attribute' 형식이어야 합니다 (예: ./src/graph.py:graph)."
+        )
+
+    module_path, attr_name = graph_path.rsplit(":", 1)
+    module_name = module_path.lstrip("./").replace("/", ".").removesuffix(".py")
+
+    module = importlib.import_module(module_name)
+    return getattr(module, attr_name)

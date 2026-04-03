@@ -9,7 +9,7 @@ from langserve import add_routes
 from pydantic import BaseModel
 
 from agents import build_graph, list_presets
-from app.utils.langgraph_loader import load_langgraph_config
+from app.utils.langgraph_loader import load_graph, load_langgraph_config
 
 # ── 상수 ─────────────────────────────────────────────────────
 
@@ -34,8 +34,9 @@ class ChatOutput(BaseModel):
 def create_app() -> FastAPI:
     """Build and return a configured FastAPI application.
 
-    langgraph.json이 있으면 name, version을 읽어
-    /{graph_name} 기반 URI를 구성합니다.
+    langgraph.json의 ``graphs`` 경로에서 컴파일된 그래프를 동적 로드하고,
+    /{graph_name} 기반 URI로 LangServe에 연결합니다.
+    ``graphs`` 설정이 없으면 ``preset`` 필드로 폴백합니다.
     """
     config = load_langgraph_config()
 
@@ -51,8 +52,12 @@ def create_app() -> FastAPI:
 
     preset = config.preset if config else "custom"
 
-    # ── 그래프 빌드 ───────────────────────────────────────────
-    graph = build_graph(preset=preset)  # type: ignore[arg-type]
+    # ── 그래프 로드 ───────────────────────────────────────────
+    # langgraph.json의 graphs 경로에서 동적 로드, 없으면 build_graph() 폴백
+    if config and config.graphs and config.graphs[0].path:
+        graph = load_graph(config.graphs[0].path)
+    else:
+        graph = build_graph(preset=preset)  # type: ignore[arg-type]
 
     # ── URI 경로 구성 ─────────────────────────────────────────
     graph_name = config.graphs[0].name if config and config.graphs else "default"
