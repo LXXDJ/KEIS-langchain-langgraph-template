@@ -21,11 +21,12 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from langchain_core.tools import tool
+from langchain_core.tools import BaseTool, tool
 
 from agents.skills._resolver import resolve_skills_dir
 
 _log = logging.getLogger(__name__)
+_MAX_SKILL_BYTES = 64 * 1024
 
 # ── 스킬 메타데이터 ──────────────────────────────────────────
 
@@ -44,8 +45,17 @@ class _SkillMeta:
         return Path(self._absolute_path).is_file()
 
     def read_content(self) -> str:
-        """SKILL.md 파일 전체 내용을 반환합니다."""
-        return Path(self._absolute_path).read_text(encoding="utf-8")
+        """SKILL.md 파일 전체 내용을 반환합니다.
+
+        64KB를 초과하면 경고 로그를 남깁니다.
+        """
+        content = Path(self._absolute_path).read_text(encoding="utf-8")
+        if len(content.encode()) > _MAX_SKILL_BYTES:
+            _log.warning(
+                "SKILL.md가 %d bytes를 초과합니다: %s",
+                _MAX_SKILL_BYTES, self.path,
+            )
+        return content
 
 
 # ── SKILL.md frontmatter 파싱 ──────────────────────────────────
@@ -69,7 +79,7 @@ def _parse_frontmatter(content: str) -> dict[str, str]:
         if stripped == "---":
             closed = True
             break
-        if ":" in stripped:
+        if ":" in stripped and not stripped.startswith("#"):
             key, _, value = stripped.partition(":")
             meta[key.strip()] = value.strip()
 
@@ -136,9 +146,7 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
             continue
 
         # symlink 등으로 root 밖을 가리키는 경우 건너뜀
-        try:
-            skill_md.resolve().relative_to(root.resolve())
-        except ValueError:
+        if not skill_md.resolve().is_relative_to(root.resolve()):
             continue
 
         try:

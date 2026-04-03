@@ -14,11 +14,12 @@ from __future__ import annotations
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain_core.tools import BaseTool
 
 from agents.state import State
 from agents.tools import get_current_time, list_skills, read_skill, search_database
 
-_SKILL_TOOLS: list[Any] = [list_skills, read_skill]
+_SKILL_TOOLS: list[BaseTool] = [list_skills, read_skill]
 
 
 # ── Worker 노드 ──────────────────────────────────────────────
@@ -35,7 +36,8 @@ async def worker_chat(state: State, **kwargs: Any) -> dict[str, Any]:
     스킬 도구 포함 여부:
         모듈 상단의 ``_SKILL_TOOLS`` 리스트로 제어합니다.
         스킬이 불필요하면 빈 리스트로 변경하세요.
-        preset의 ``include_skill_tools`` opt-in 방식과는 독립적입니다.
+        preset의 ``include_skill_tools`` opt-in 방식과는 독립적이므로,
+        여기서 이미 스킬 도구를 추가한 경우 preset에서 중복 지정하지 마세요.
     """
     messages = state.get("messages", [])
 

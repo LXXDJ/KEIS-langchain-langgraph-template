@@ -66,8 +66,10 @@ def skills_dir(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def empty_skills_dir(tmp_path: Path) -> Path:
-    """빈 스킬 디렉토리를 반환합니다."""
-    return tmp_path / "empty_skills"
+    """빈 스킬 디렉토리를 생성하여 반환합니다."""
+    d = tmp_path / "empty_skills"
+    d.mkdir()
+    return d
 
 
 # ── resolve_skills_dir ─────────────────────────────────────────
@@ -128,6 +130,9 @@ class TestParseFrontmatter:
         # 닫는 ---가 없으면 모든 key:value 라인을 메타데이터로 인식
         assert meta["name"] == "broken"
         assert "not" in meta
+        # # 으로 시작하는 주석 라인은 무시
+        assert "#" not in meta
+        assert "# This is body" not in meta
 
     def test_unclosed_frontmatter_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """닫는 --- 없으면 경고 로그가 남습니다."""
@@ -202,15 +207,11 @@ class TestScanSkills:
         import agents.tools.skills as skills_mod
 
         monkeypatch.setenv("AGENT_SKILLS_DIR", str(skills_dir))
-        original_ttl = skills_mod._TTL_SECONDS
         monkeypatch.setattr(skills_mod, "_TTL_SECONDS", 0)
-        try:
-            first = _scan_skills()
-            second = _scan_skills()
-            assert first is not second  # TTL=0이므로 매번 새 스캔
-            assert {s.name for s in first} == {s.name for s in second}
-        finally:
-            skills_mod._TTL_SECONDS = original_ttl
+        first = _scan_skills()
+        second = _scan_skills()
+        assert first is not second  # TTL=0이므로 매번 새 스캔
+        assert {s.name for s in first} == {s.name for s in second}
 
 
 # ── list_skills (도구) ─────────────────────────────────────────
