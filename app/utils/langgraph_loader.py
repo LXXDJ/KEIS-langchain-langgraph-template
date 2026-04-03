@@ -7,14 +7,28 @@ from pathlib import Path
 
 from app.utils.schema import GraphConfig, LanggraphJson, Maintainer
 
-_DEFAULT_CONFIG_PATH = Path("langgraph.json")
+_ROOT_MARKERS = ("pyproject.toml", "setup.py", "setup.cfg")
+
+
+def _find_project_root(start: Path | None = None) -> Path | None:
+    """프로젝트 루트 마커 파일을 기준으로 루트 디렉토리를 탐색합니다."""
+    current = (start or Path(__file__)).resolve().parent
+    for parent in (current, *current.parents):
+        if any((parent / marker).exists() for marker in _ROOT_MARKERS):
+            return parent
+    return None
 
 
 def load_langgraph_config(
-    path: Path | str = _DEFAULT_CONFIG_PATH,
+    path: Path | str | None = None,
 ) -> LanggraphJson | None:
     """Read langgraph.json and return a typed config, or None if missing."""
-    config_path = Path(path)
+    if path is not None:
+        config_path = Path(path)
+    else:
+        root = _find_project_root()
+        config_path = root / "langgraph.json" if root else Path("langgraph.json")
+
     if not config_path.exists():
         return None
 

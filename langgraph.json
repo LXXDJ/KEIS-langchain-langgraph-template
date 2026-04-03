@@ -3,7 +3,7 @@
   "graphs": {
     "agent": "./src/graph.py:graph"
   },
-  "preset": "chat",
+  "preset": "deep_research",
   "type": "service",
   "name": "langchain-langgraph-template",
   "version": "v260331",
