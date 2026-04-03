@@ -20,6 +20,7 @@ def build_deep_research(
     subagents: list[Any] | None = None,
     skills: list[str] | None = None,
     memory: list[str] | None = None,
+    include_skill_tools: bool = True,
     name: str | None = "deep_research",
     **kwargs: Any,
 ) -> CompiledStateGraph:
@@ -35,6 +36,10 @@ def build_deep_research(
                 from agents.backends import create_composite_backend, create_store_backend
                 build_deep_research(backend=create_composite_backend())
                 build_deep_research(backend=create_store_backend())
+        include_skill_tools: True이면 list_skills, read_skill 도구를
+            자동으로 tools에 추가합니다.
+            네이티브 skills 파라미터와 독립적으로 동작하므로,
+            도구 기반 스킬과 네이티브 스킬을 함께 사용할 수 있습니다.
     """
     # NOTE: 지연 임포트 — deepagents는 무거운 서드파티이므로 호출 시점에 로드
     from deepagents import create_deep_agent
@@ -42,9 +47,16 @@ def build_deep_research(
     if backend is None:
         backend = create_filesystem_backend()
 
+    all_tools = list(tools or [])
+
+    if include_skill_tools:
+        from agents.tools import list_skills, read_skill
+
+        all_tools.extend([list_skills, read_skill])
+
     return create_deep_agent(
         model=model,
-        tools=list(tools or []),
+        tools=all_tools,
         system_prompt=system_prompt or (
             "You are a deep research assistant. "
             "Plan carefully, use tools when useful, "
