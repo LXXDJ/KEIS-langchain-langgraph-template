@@ -47,13 +47,21 @@ def _parse_frontmatter(content: str) -> dict[str, str]:
 
 
 def _scan_skills(skills_dir: str | None = None) -> list[dict[str, str]]:
-    """스킬 디렉토리를 스캔하여 frontmatter 목록을 반환합니다."""
+    """스킬 디렉토리를 스캔하여 frontmatter 목록을 반환합니다.
+
+    ``_`` 접두사 디렉토리(__pycache__, _resolver 등)는 건너뜁니다.
+    """
     root = Path(resolve_skills_dir(skills_dir))
     if not root.is_dir():
         return []
 
     skills: list[dict[str, str]] = []
     for skill_md in sorted(root.rglob("SKILL.md")):
+        # _접두사 디렉토리(Python 내부 파일) 하위는 스킬이 아님
+        rel = skill_md.relative_to(root)
+        if any(part.startswith("_") for part in rel.parts):
+            continue
+
         content = skill_md.read_text(encoding="utf-8")
         meta = _parse_frontmatter(content)
         if "name" not in meta:
