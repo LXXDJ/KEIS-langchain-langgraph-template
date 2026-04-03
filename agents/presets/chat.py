@@ -23,6 +23,12 @@ def build_chat(
     생태계 내장 기능(미들웨어, response_format 등)을 그대로 활용합니다.
 
     Args:
+        tools: 에이전트에 전달할 도구 목록. None이면 빈 리스트.
+            ``agents.tools.examples`` 에 즉시 사용 가능한 예시 도구가 있습니다::
+
+                from agents.tools import get_current_time, search_database
+                build_chat(tools=[get_current_time, search_database])
+
         include_skill_tools: True이면 list_skills, read_skill 도구를
             자동으로 tools에 추가합니다. 스킬이 불필요하면 False로 끕니다.
     """

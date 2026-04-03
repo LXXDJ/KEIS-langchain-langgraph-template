@@ -30,6 +30,12 @@ def build_deep_research(
     deep research에 필요한 미들웨어 스택이 자동 구성됩니다.
 
     Args:
+        tools: 에이전트에 전달할 도구 목록. None이면 빈 리스트.
+            ``agents.tools.examples`` 에 즉시 사용 가능한 예시 도구가 있습니다::
+
+                from agents.tools import search_web, read_document
+                build_deep_research(tools=[search_web, read_document])
+
         backend: 백엔드 인스턴스 또는 팩토리 함수.
             None이면 create_filesystem_backend() 사용 (→ {프로젝트루트}/outputs/).
             다른 백엔드로 교체 시:
