@@ -10,7 +10,8 @@ preset 시스템으로 에이전트 유형을 선택하고, 모든 preset은 동
 ## 실행 방법
 
 ```bash
-cp .env.example .env   # AGENT_PRESET, OPENAI_API_KEY 설정
+cp .env.example .env   # OPENAI_API_KEY 등 설정
+# langgraph.json의 "preset" 필드로 에이전트 유형 선택 (custom, chat, deep_research)
 ./scripts/run-local.sh # uv 기반 로컬 실행
 ./scripts/run-docker.sh # Docker 실행
 ```
@@ -18,15 +19,19 @@ cp .env.example .env   # AGENT_PRESET, OPENAI_API_KEY 설정
 ## 폴더 구조 규칙
 
 ```
-agents/              # 에이전트 구현 (그래프, 노드, 상태, 프리셋)
-  ├─ presets/        # 그래프 빌더 함수 (build_custom, build_chat, build_deep_research)
-  ├─ nodes/          # 개별 노드 함수 (async only)
-  ├─ tools/          # 범용 도구 (@tool). worker 전용 도구는 해당 worker 파일 안에 정의
-  ├─ skills/         # Deep Agents 스킬 (재사용 가능한 능력 단위)
-  ├─ backends/       # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
-  ├─ middlewares/    # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
-  ├─ state.py        # State 정의 (이 파일 하나에서만 관리)
-  └─ registry.py     # preset 메타 정보
+src/
+  ├─ graph.py        # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
+  └─ agents/         # 에이전트 구현 (그래프, 노드, 상태, 프리셋)
+      ├─ presets/    # 그래프 빌더 함수 (build_custom, build_chat, build_deep_research)
+      ├─ nodes/      # 개별 노드 함수 (async only)
+      ├─ tools/      # 범용 도구 (@tool). worker 전용 도구는 해당 worker 파일 안에 정의
+      ├─ skills/     # 스킬 경로 해석 유틸 (_resolver.py)
+      ├─ backends/   # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
+      ├─ middlewares/ # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
+      ├─ _utils.py   # 패키지 내부 공통 유틸 (find_project_root 등)
+      ├─ state.py    # State 정의 (이 파일 하나에서만 관리)
+      └─ registry.py # preset 메타 정보
+skills/              # SKILL.md 파일 모음 (에이전트가 조회·실행하는 스킬 정의)
 app/                 # 서빙 레이어 (FastAPI + LangServe)
   └─ utils/          # 서버 팩토리, langgraph.json 로더, 스키마
 docs/ko/             # 한국어 문서
@@ -36,18 +41,18 @@ examples/            # preset별 사용 예시
 
 ### 새 파일 위치 규칙
 
-- 새 노드 → `agents/nodes/` 에 추가하고 `agents/nodes/__init__.py`에 export
-- 새 preset → `agents/presets/` 에 추가하고 `agents/presets/__init__.py`에 export, `agents/registry.py`에 메타 등록
-- 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `agents/tools/`
-- 새 스킬 → `agents/skills/` 에 추가하고 `__init__.py`에 export
-- 새 백엔드 → `agents/backends/` 에 추가하고 `__init__.py`에 export
-- 새 미들웨어 → `agents/middlewares/` 에 추가하고 `__init__.py`에 export
+- 새 노드 → `src/agents/nodes/` 에 추가하고 `src/agents/nodes/__init__.py`에 export
+- 새 preset → `src/agents/presets/` 에 추가하고 `src/agents/presets/__init__.py`에 export, `src/agents/registry.py`에 메타 등록
+- 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `src/agents/tools/`
+- 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성 (64KB 이하 권장 — LLM 컨텍스트로 전달됨)
+- 새 백엔드 → `src/agents/backends/` 에 추가하고 `__init__.py`에 export
+- 새 미들웨어 → `src/agents/middlewares/` 에 추가하고 `__init__.py`에 export
 - 서빙 관련 유틸 → `app/utils/`
 - 문서 → `docs/ko/`
 
 ### 금지 사항
 
-- `agents/` 에 서빙 로직 넣지 않기 (에이전트와 서빙의 관심사 분리)
+- `src/agents/` 에 서빙 로직 넣지 않기 (에이전트와 서빙의 관심사 분리)
 - `app/` 에서 노드나 State를 직접 정의하지 않기
 - `state.py` 외의 파일에서 State TypedDict를 새로 정의하지 않기
 - 루트에 Python 소스 파일 넣지 않기
@@ -93,7 +98,7 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 
 ### State 규칙
 
-- 모든 State는 `agents/state.py` 에서 정의
+- 모든 State는 `src/agents/state.py` 에서 정의
 - 4분리 패턴 유지: `InputState`, `InternalState`, `OutputState`, `Context`
 - `State = InputState + InternalState + OutputState` (합집합)
 - 내부 전용 필드는 `_` 접두사: `_worker_outputs`

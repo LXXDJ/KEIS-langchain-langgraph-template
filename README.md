@@ -8,21 +8,23 @@ LangChain, LangGraph, Deep Agents 생태계를 기반으로 **바로 개발에 �
 
 ```text
 langchain-deep-agent-template/
-├─ agents/
-│  ├─ __init__.py              # 공개 API (build_graph, list_presets)
-│  ├─ graph_builder.py         # build_graph(preset=...) 통합 진입점
-│  ├─ state.py                 # State 정의 (messages 기반 Input/Internal/Output/Context)
-│  ├─ registry.py              # preset 메타 정보
-│  ├─ presets/
-│  │  ├─ custom.py             # 수동 StateGraph 노드 조합 (worker_type으로 worker 선택)
-│  │  ├─ chat.py               # create_agent() 기반
-│  │  └─ deep_research.py      # create_deep_agent() 기반
-│  └─ nodes/
-│     ├─ preprocess.py         # 입력 전처리 (async)
-│     ├─ postprocessor.py      # 후처리 (async)
-│     ├─ worker.py             # 기본 worker — LLM 없이 테스트용 (async)
-│     ├─ worker_chat.py        # create_agent() 활용 worker 예시 (async)
-│     └─ worker_deep.py        # create_deep_agent() 활용 worker 예시 (async)
+├─ src/
+│  ├─ graph.py                 # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
+│  └─ agents/
+│     ├─ __init__.py           # 공개 API (build_graph, list_presets)
+│     ├─ graph_builder.py      # build_graph(preset=...) 통합 진입점
+│     ├─ state.py              # State 정의 (messages 기반 Input/Internal/Output/Context)
+│     ├─ registry.py           # preset 메타 정보
+│     ├─ presets/
+│     │  ├─ custom.py          # 수동 StateGraph 노드 조합 (worker_type으로 worker 선택)
+│     │  ├─ chat.py            # create_agent() 기반
+│     │  └─ deep_research.py   # create_deep_agent() 기반
+│     └─ nodes/
+│        ├─ preprocess.py      # 입력 전처리 (async)
+│        ├─ postprocessor.py   # 후처리 (async)
+│        ├─ worker.py          # 기본 worker — LLM 없이 테스트용 (async)
+│        ├─ worker_chat.py     # create_agent() 활용 worker 예시 (async)
+│        └─ worker_deep.py     # create_deep_agent() 활용 worker 예시 (async)
 ├─ app/
 │  ├─ run.py                   # 서버 진입점
 │  └─ utils/
@@ -50,7 +52,8 @@ langchain-deep-agent-template/
 ```bash
 # 1. 환경 설정
 cp .env.example .env
-# .env 파일에서 AGENT_PRESET, OPENAI_API_KEY 등 설정
+# .env 파일에서 OPENAI_API_KEY 등 설정
+# langgraph.json의 "preset" 필드로 에이전트 유형 선택
 
 # 2. 로컬 실행 (uv 필요)
 ./scripts/run-local.sh
@@ -125,7 +128,7 @@ graph = build_custom(worker_type="deep")
 
 ### 노드 안에서 create_agent() 사용
 
-`agents/nodes/worker_chat.py`에 구현된 핵심 패턴입니다. 수동 StateGraph의 노드 안에서 `create_agent()`를 서브에이전트로 호출하여, 파이프라인의 유연성과 LLM 에이전트의 기능을 동시에 활용합니다.
+`src/agents/nodes/worker_chat.py`에 구현된 핵심 패턴입니다. 수동 StateGraph의 노드 안에서 `create_agent()`를 서브에이전트로 호출하여, 파이프라인의 유연성과 LLM 에이전트의 기능을 동시에 활용합니다.
 
 ```python
 from langchain.agents import create_agent
@@ -185,7 +188,6 @@ LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 키에서 U
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `AGENT_PRESET` | `custom` | 사용할 preset (`custom`, `chat`, `deep_research`) |
 | `OPENAI_API_KEY` | — | chat, deep_research preset에서 필요 |
 | `HOST` | `0.0.0.0` | 서버 바인딩 호스트 |
 | `PORT` | `8000` | 서버 포트 |

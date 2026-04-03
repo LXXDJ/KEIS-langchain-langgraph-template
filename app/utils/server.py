@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+import logging
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -11,7 +11,9 @@ from langserve import add_routes
 from pydantic import BaseModel
 
 from agents import build_graph, list_presets
-from app.utils.langgraph_loader import load_langgraph_config
+from app.utils.langgraph_loader import load_graph, load_langgraph_config
+
+_log = logging.getLogger(__name__)
 
 # ── 상수 ─────────────────────────────────────────────────────
 
@@ -36,8 +38,9 @@ class ChatOutput(BaseModel):
 def create_app() -> FastAPI:
     """Build and return a configured FastAPI application.
 
-    langgraph.json이 있으면 name, version을 읽어
-    /{graph_name} 기반 URI를 구성합니다.
+    langgraph.json의 ``graphs`` 경로에서 컴파일된 그래프를 동적 로드하고,
+    /{graph_name} 기반 URI로 LangServe에 연결합니다.
+    ``graphs`` 설정이 없으면 ``preset`` 필드로 폴백합니다.
     """
     config = load_langgraph_config()
 
@@ -51,14 +54,26 @@ def create_app() -> FastAPI:
         description=service_description,
     )
 
-    preset = os.getenv("AGENT_PRESET", "custom")
+    preset = config.preset if config else "custom"
 
-    # ── 그래프 빌드 ───────────────────────────────────────────
-    graph = build_graph(preset=preset)  # type: ignore[arg-type]
+    # ── 그래프 로드 ───────────────────────────────────────────
+    # langgraph.json의 graphs 경로에서 동적 로드, 없으면 build_graph() 폴백
+    # 현재 첫 번째 그래프만 사용합니다.
+    graph_config = config.graphs[0] if config and config.graphs else None
+
+    if config and len(config.graphs) > 1:
+        _log.warning(
+            "langgraph.json에 %d개의 그래프가 정의되었지만, 첫 번째만 사용합니다: %s",
+            len(config.graphs), graph_config.name if graph_config else "N/A",
+        )
+
+    if graph_config and graph_config.path:
+        graph = load_graph(graph_config.path)
+    else:
+        graph = build_graph(preset=preset)  # type: ignore[arg-type]
 
     # ── URI 경로 구성 ─────────────────────────────────────────
-    graph_name = config.graphs[0].name if config and config.graphs else "default"
-    base_path = f"/{graph_name}"
+    base_path = f"/{graph_config.name}" if graph_config else "/default"
 
     # ── add_routes ────────────────────────────────────────────
     # deep_research: create_deep_agent() 내부 state에
