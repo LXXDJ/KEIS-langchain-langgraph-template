@@ -95,10 +95,10 @@ Deep Agents 문서 기준 기본 내장 항목:
 예시:
 
 ```python
-from langchain.agents.middleware import SummarizationMiddleware
+from agents.middlewares import create_summarization_middleware
 
 middleware = [
-    SummarizationMiddleware(
+    create_summarization_middleware(
         model="openai:gpt-4.1-mini",
         trigger=("tokens", 4000),
         keep=("messages", 20),

@@ -40,7 +40,7 @@ def build_custom(
     Args:
         worker_type: 사용할 worker 구현체.
             - "default": LLM 없이 테스트용
-            - "chat": create_react_agent() 기반
+            - "chat": create_agent() 기반
             - "deep": create_deep_agent() 기반
 
     그래프 구조:
