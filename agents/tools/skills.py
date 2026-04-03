@@ -39,6 +39,10 @@ class _SkillMeta:
     path: str
     _absolute_path: str = field(repr=False)
 
+    def exists(self) -> bool:
+        """SKILL.md 파일이 존재하는지 확인합니다."""
+        return Path(self._absolute_path).is_file()
+
     def read_content(self) -> str:
         """SKILL.md 파일 전체 내용을 반환합니다."""
         return Path(self._absolute_path).read_text(encoding="utf-8")
@@ -111,6 +115,8 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
     resolved_dir = resolve_skills_dir(skills_dir)
 
     # TTL 캐시 — 기본 경로일 때만 적용
+    # 환경변수 변경 등으로 resolved_dir이 달라지면 cached_dir 비교에서
+    # 캐시 미스가 발생하여 자동으로 재스캔됩니다.
     now = time.monotonic()
     if skills_dir is None and _cache is not None:
         cached_time, cached_dir, cached_result = _cache
@@ -182,13 +188,14 @@ def read_skill(skill_name: str) -> str:
     Args:
         skill_name: 읽을 스킬의 이름 (list_skills에서 확인).
     """
+    # skill_name은 _scan_skills()가 반환한 목록에서만 매칭되므로
+    # 경로 순회(../) 공격은 불가능합니다 (symlink 검증은 _scan_skills 내부에서 수행).
     skills = _scan_skills()
     for s in skills:
         if s.name == skill_name:
-            skill_path = Path(s._absolute_path)
-            if skill_path.is_file():
+            if s.exists():
                 return s.read_content()
-            return f"스킬 파일을 찾을 수 없습니다: {skill_path}"
+            return f"스킬 파일을 찾을 수 없습니다: {s.path}"
 
     available = ", ".join(s.name for s in skills) or "(없음)"
     return f"'{skill_name}' 스킬을 찾을 수 없습니다. 사용 가능: {available}"

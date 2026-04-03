@@ -16,12 +16,7 @@ from typing import Any
 from langchain.agents import create_agent
 
 from agents.state import State
-from agents.tools import get_current_time, search_database
-
-# ── 스킬 도구 (선택적) ──────────────────────────────────────
-# 스킬 도구가 불필요하면 아래 import와 _SKILL_TOOLS를 제거하세요.
-
-from agents.tools import list_skills, read_skill
+from agents.tools import get_current_time, list_skills, read_skill, search_database
 
 _SKILL_TOOLS: list[Any] = [list_skills, read_skill]
 

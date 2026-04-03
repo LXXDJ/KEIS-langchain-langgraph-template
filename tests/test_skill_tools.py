@@ -157,7 +157,7 @@ class TestScanSkills:
             assert Path(s._absolute_path).is_absolute()  # noqa: SLF001
 
     def test_scan_ignores_nested_skill_md(self, skills_dir: Path) -> None:
-        """1단계 깊이만 인식하고, 중첩된 SKILL.md는 무시합니다."""
+        """glob("*/SKILL.md")로 1단계 깊이만 인식하고, 중첩된 SKILL.md는 무시합니다."""
         nested = skills_dir / "alpha" / "examples"
         nested.mkdir()
         (nested / "SKILL.md").write_text("---\nname: nested\n---\n")
@@ -194,6 +194,23 @@ class TestScanSkills:
         first = _scan_skills()
         second = _scan_skills()
         assert first is second  # 동일 객체 (캐시)
+
+    def test_cache_expires_after_ttl(
+        self, skills_dir: Path, monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """TTL 만료 후 재스캔이 동작합니다."""
+        import agents.tools.skills as skills_mod
+
+        monkeypatch.setenv("AGENT_SKILLS_DIR", str(skills_dir))
+        original_ttl = skills_mod._TTL_SECONDS
+        monkeypatch.setattr(skills_mod, "_TTL_SECONDS", 0)
+        try:
+            first = _scan_skills()
+            second = _scan_skills()
+            assert first is not second  # TTL=0이므로 매번 새 스캔
+            assert {s.name for s in first} == {s.name for s in second}
+        finally:
+            skills_mod._TTL_SECONDS = original_ttl
 
 
 # ── list_skills (도구) ─────────────────────────────────────────

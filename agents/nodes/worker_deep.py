@@ -19,12 +19,7 @@ from deepagents import create_deep_agent
 
 from agents.backends import create_filesystem_backend
 from agents.state import State
-from agents.tools import read_document, search_web
-
-# ── 스킬 도구 (선택적) ──────────────────────────────────────
-# 스킬 도구가 불필요하면 아래 import와 _SKILL_TOOLS를 제거하세요.
-
-from agents.tools import list_skills, read_skill
+from agents.tools import list_skills, read_document, read_skill, search_web
 
 _SKILL_TOOLS: list[Any] = [list_skills, read_skill]
 
