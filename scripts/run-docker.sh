@@ -61,7 +61,7 @@ if [ "$DO_RUN" = true ]; then
     echo ""
     echo "Starting container: ${CONTAINER_NAME}"
     echo "  http://localhost:${PORT}"
-    echo "  playground: http://localhost:${PORT}/default/playground/"
+    echo "  playground: http://localhost:${PORT}/agent/playground/"
     echo "  docs:       http://localhost:${PORT}/docs"
     echo ""
 
