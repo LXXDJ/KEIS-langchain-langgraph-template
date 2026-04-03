@@ -7,7 +7,7 @@ from pathlib import Path
 
 from agents._utils import find_project_root
 
-_SKILLS_REL_PATH = Path("agents") / "skills"
+_SKILLS_REL_PATH = Path("skills")
 _ENV_KEY = "AGENT_SKILLS_DIR"
 
 
@@ -17,7 +17,7 @@ def resolve_skills_dir(skills_dir: str | None = None) -> str:
     우선순위:
         1. 인자로 명시한 skills_dir
         2. 환경변수 AGENT_SKILLS_DIR
-        3. {langgraph.json 위치}/agents/skills
+        3. {langgraph.json 위치}/skills
     """
     if skills_dir is not None:
         path = Path(skills_dir)
