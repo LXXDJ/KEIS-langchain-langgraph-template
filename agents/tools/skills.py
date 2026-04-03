@@ -151,8 +151,9 @@ def _scan_skills(skills_dir: str | None = None) -> list[_SkillMeta]:
 
         try:
             content = skill_md.read_text(encoding="utf-8")
-        except OSError:
-            continue  # 해당 스킬만 건너뜀
+        except (OSError, UnicodeDecodeError):
+            _log.warning("SKILL.md 읽기 실패, 건너뜁니다: %s", skill_md)
+            continue
 
         meta = _parse_frontmatter(content)
         skills.append(_SkillMeta(
