@@ -56,7 +56,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agents", "app"]
+known-first-party = ["agents", "app", "src"]
 
 [tool.ruff.format]
 quote-style = "double"

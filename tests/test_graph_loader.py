@@ -30,3 +30,8 @@ class TestLoadGraph:
         """존재하지 않는 속성은 AttributeError를 발생시킵니다."""
         with pytest.raises(AttributeError):
             load_graph("./src/graph.py:nonexistent")
+
+    def test_nonexistent_file_raises(self) -> None:
+        """존재하지 않는 파일 경로는 FileNotFoundError를 발생시킵니다."""
+        with pytest.raises(FileNotFoundError):
+            load_graph("./nonexistent_path/graph.py:graph")

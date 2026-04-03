@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from langchain_core.messages import AnyMessage
@@ -54,14 +56,23 @@ def create_app() -> FastAPI:
 
     # ── 그래프 로드 ───────────────────────────────────────────
     # langgraph.json의 graphs 경로에서 동적 로드, 없으면 build_graph() 폴백
-    if config and config.graphs and config.graphs[0].path:
-        graph = load_graph(config.graphs[0].path)
+    # 현재 첫 번째 그래프만 사용합니다.
+    graph_config = config.graphs[0] if config and config.graphs else None
+
+    if config and len(config.graphs) > 1:
+        _log = logging.getLogger(__name__)
+        _log.warning(
+            "langgraph.json에 %d개의 그래프가 정의되었지만, 첫 번째만 사용합니다: %s",
+            len(config.graphs), graph_config.name if graph_config else "N/A",
+        )
+
+    if graph_config and graph_config.path:
+        graph = load_graph(graph_config.path)
     else:
         graph = build_graph(preset=preset)  # type: ignore[arg-type]
 
     # ── URI 경로 구성 ─────────────────────────────────────────
-    graph_name = config.graphs[0].name if config and config.graphs else "default"
-    base_path = f"/{graph_name}"
+    base_path = f"/{graph_config.name}" if graph_config else "/default"
 
     # ── add_routes ────────────────────────────────────────────
     # deep_research: create_deep_agent() 내부 state에

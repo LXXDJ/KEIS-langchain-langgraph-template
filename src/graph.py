@@ -13,10 +13,19 @@ langgraph.json 예시::
 
 from __future__ import annotations
 
+import json
+
 from agents import build_graph
-from app.utils.langgraph_loader import load_langgraph_config
+from agents._utils import find_project_root
 
-_config = load_langgraph_config()
-_preset = _config.preset if _config else "custom"
 
-graph = build_graph(preset=_preset)  # type: ignore[arg-type]
+def _read_preset() -> str:
+    """langgraph.json에서 preset 값을 읽습니다. 없으면 'custom'을 반환합니다."""
+    config_path = find_project_root() / "langgraph.json"
+    if not config_path.exists():
+        return "custom"
+    raw = json.loads(config_path.read_text())
+    return raw.get("preset", "custom")
+
+
+graph = build_graph(preset=_read_preset())  # type: ignore[arg-type]

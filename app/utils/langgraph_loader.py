@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import json
+import logging
+import sys
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 from app.utils.schema import GraphConfig, LanggraphJson, Maintainer
 
@@ -101,8 +106,11 @@ def load_graph(graph_path: str) -> Any:
             raise FileNotFoundError(f"그래프 모듈 파일을 찾을 수 없습니다: {file_path}")
 
         spec = importlib.util.spec_from_file_location("_graph_module", file_path)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"그래프 모듈 스펙을 로드할 수 없습니다: {file_path}")
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        sys.modules["_graph_module"] = module
+        spec.loader.exec_module(module)
     else:
         # 모듈 경로 — import_module로 로드
         module = importlib.import_module(module_path)
