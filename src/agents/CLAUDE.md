@@ -1,13 +1,13 @@
-# agents/ 컨벤션
+# src/agents/ 컨벤션
 
 이 폴더는 에이전트 구현 레이어입니다. 서빙(`app/`)과 관심사가 분리되어 있습니다.
 
-> 프로젝트 전체 코딩 스타일(Python 스타일, import 순서, 네이밍 등)은 [루트 CLAUDE.md](../CLAUDE.md)를 참고하세요.
+> 프로젝트 전체 코딩 스타일(Python 스타일, import 순서, 네이밍 등)은 [루트 CLAUDE.md](../../CLAUDE.md)를 참고하세요.
 
 ## 구조
 
 ```
-agents/
+src/agents/
 ├─ __init__.py        # 공개 API만 export (build_graph, list_presets, State 등)
 ├─ graph_builder.py   # build_graph(preset=...) — 유일한 그래프 생성 진입점
 ├─ state.py           # State 정의 — 이 파일에서만 TypedDict 관리
@@ -24,34 +24,34 @@ agents/
 
 ### 노드
 
-1. `agents/nodes/` 에 파일 생성 (snake_case)
-2. `agents/nodes/__init__.py` 에 export 추가
+1. `src/agents/nodes/` 에 파일 생성 (snake_case)
+2. `src/agents/nodes/__init__.py` 에 export 추가
 3. 필요 시 preset에서 참조
 
 ### preset
 
-1. `agents/presets/` 에 `build_{name}()` 함수 생성
+1. `src/agents/presets/` 에 `build_{name}()` 함수 생성
 2. 반환 타입은 반드시 `CompiledStateGraph`
 3. messages 기반 입출력 인터페이스 유지
-4. `agents/presets/__init__.py` 에 export 추가
-5. `agents/registry.py` 에 `PresetInfo` 등록
-6. `agents/graph_builder.py` 의 `Preset` Literal과 `_BUILDERS` 맵에 추가
+4. `src/agents/presets/__init__.py` 에 export 추가
+5. `src/agents/registry.py` 에 `PresetInfo` 등록
+6. `src/agents/graph_builder.py` 의 `Preset` Literal과 `_BUILDERS` 맵에 추가
 
 ### worker
 
-1. `agents/nodes/worker_{name}.py` 로 생성
-2. `agents/nodes/__init__.py` 에 export
-3. `agents/presets/custom.py` 의 `_WORKER_MAP`에 등록
+1. `src/agents/nodes/worker_{name}.py` 로 생성
+2. `src/agents/nodes/__init__.py` 에 export
+3. `src/agents/presets/custom.py` 의 `_WORKER_MAP`에 등록
 4. `WorkerType` Literal에 키 추가
 
 ### 도구(@tool)
 
 - 특정 worker 전용 → 해당 `worker_*.py` 파일 안에 `@tool` 정의
-- 범용 → `agents/tools/` 에 파일 생성, `__init__.py`에 export
+- 범용 → `src/agents/tools/` 에 파일 생성, `__init__.py`에 export
 
 ### 백엔드
 
-`agents/backends/`에 자주 쓰는 백엔드 조합을 팩토리 함수로 정의합니다.
+`src/agents/backends/`에 자주 쓰는 백엔드 조합을 팩토리 함수로 정의합니다.
 함수명은 `create_*_backend` 패턴을 따릅니다.
 
 - `create_filesystem_backend()` — 로컬 파일시스템만 사용 (가장 단순)
@@ -60,14 +60,14 @@ agents/
 - `create_store_backend()` — LangGraph BaseStore 기반 크로스스레드 영속 저장
 
 새 백엔드 추가 시:
-1. `agents/backends/` 에 `{name}.py` 파일 생성
+1. `src/agents/backends/` 에 `{name}.py` 파일 생성
 2. `def create_{name}_backend(...)` 팩토리 함수 정의
-3. `agents/backends/__init__.py`에 export
+3. `src/agents/backends/__init__.py`에 export
 4. 독스트링에 "적합한 경우" 섹션을 반드시 포함
 
 ### 미들웨어
 
-`agents/middlewares/`에 에이전트 실행 정책을 팩토리 함수로 정의합니다.
+`src/agents/middlewares/`에 에이전트 실행 정책을 팩토리 함수로 정의합니다.
 함수명은 `create_*_middleware` 패턴을 따릅니다.
 
 컨텍스트 관리:
@@ -95,14 +95,14 @@ agents/
 - `create_tool_emulator_middleware()` — LLM으로 도구 응답 에뮬레이션
 
 새 미들웨어 추가 시:
-1. `agents/middlewares/` 에 `{name}.py` 파일 생성
+1. `src/agents/middlewares/` 에 `{name}.py` 파일 생성
 2. `def create_{name}_middleware(...)` 팩토리 함수 정의
-3. `agents/middlewares/__init__.py`에 export
+3. `src/agents/middlewares/__init__.py`에 export
 4. 독스트링에 "적합한 경우" 섹션을 반드시 포함
 
 ### 스킬
 
-`agents/skills/`에 Deep Agents 기반 재사용 가능한 능력 단위를 정의합니다.
+`src/agents/skills/`에 Deep Agents 기반 재사용 가능한 능력 단위를 정의합니다.
 스킬은 특정 에이전트의 특화된 능력을 캡슐화하며, 다른 에이전트와 공유할 수 있습니다.
 
 스킬 정의:
@@ -117,9 +117,9 @@ agents/
 - `run()` 또는 `__call__()`: 스킬 실행 메서드
 
 새 스킬 추가 시:
-1. `agents/skills/` 에 `{name}_skill.py` 파일 생성
+1. `src/agents/skills/` 에 `{name}_skill.py` 파일 생성
 2. 스킬 클래스 정의 (예: `class ResearchSkill`)
-3. `agents/skills/__init__.py`에 export
+3. `src/agents/skills/__init__.py`에 export
 4. 필요한 preset에서 스킬 인스턴스 생성 및 등록
 
 ## State 변경 규칙

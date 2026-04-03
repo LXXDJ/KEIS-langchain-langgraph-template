@@ -8,21 +8,23 @@ LangChain, LangGraph, Deep Agents 생태계를 기반으로 **바로 개발에 �
 
 ```text
 langchain-deep-agent-template/
-├─ agents/
-│  ├─ __init__.py              # 공개 API (build_graph, list_presets)
-│  ├─ graph_builder.py         # build_graph(preset=...) 통합 진입점
-│  ├─ state.py                 # State 정의 (messages 기반 Input/Internal/Output/Context)
-│  ├─ registry.py              # preset 메타 정보
-│  ├─ presets/
-│  │  ├─ custom.py             # 수동 StateGraph 노드 조합 (worker_type으로 worker 선택)
-│  │  ├─ chat.py               # create_agent() 기반
-│  │  └─ deep_research.py      # create_deep_agent() 기반
-│  └─ nodes/
-│     ├─ preprocess.py         # 입력 전처리 (async)
-│     ├─ postprocessor.py      # 후처리 (async)
-│     ├─ worker.py             # 기본 worker — LLM 없이 테스트용 (async)
-│     ├─ worker_chat.py        # create_agent() 활용 worker 예시 (async)
-│     └─ worker_deep.py        # create_deep_agent() 활용 worker 예시 (async)
+├─ src/
+│  ├─ graph.py                 # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
+│  └─ agents/
+│     ├─ __init__.py           # 공개 API (build_graph, list_presets)
+│     ├─ graph_builder.py      # build_graph(preset=...) 통합 진입점
+│     ├─ state.py              # State 정의 (messages 기반 Input/Internal/Output/Context)
+│     ├─ registry.py           # preset 메타 정보
+│     ├─ presets/
+│     │  ├─ custom.py          # 수동 StateGraph 노드 조합 (worker_type으로 worker 선택)
+│     │  ├─ chat.py            # create_agent() 기반
+│     │  └─ deep_research.py   # create_deep_agent() 기반
+│     └─ nodes/
+│        ├─ preprocess.py      # 입력 전처리 (async)
+│        ├─ postprocessor.py   # 후처리 (async)
+│        ├─ worker.py          # 기본 worker — LLM 없이 테스트용 (async)
+│        ├─ worker_chat.py     # create_agent() 활용 worker 예시 (async)
+│        └─ worker_deep.py     # create_deep_agent() 활용 worker 예시 (async)
 ├─ app/
 │  ├─ run.py                   # 서버 진입점
 │  └─ utils/
@@ -126,7 +128,7 @@ graph = build_custom(worker_type="deep")
 
 ### 노드 안에서 create_agent() 사용
 
-`agents/nodes/worker_chat.py`에 구현된 핵심 패턴입니다. 수동 StateGraph의 노드 안에서 `create_agent()`를 서브에이전트로 호출하여, 파이프라인의 유연성과 LLM 에이전트의 기능을 동시에 활용합니다.
+`src/agents/nodes/worker_chat.py`에 구현된 핵심 패턴입니다. 수동 StateGraph의 노드 안에서 `create_agent()`를 서브에이전트로 호출하여, 파이프라인의 유연성과 LLM 에이전트의 기능을 동시에 활용합니다.
 
 ```python
 from langchain.agents import create_agent

@@ -94,18 +94,20 @@ StateGraph(
 ## 디렉토리 구조
 
 ```text
-agents/
-├── graph_builder.py      # build_graph() 통합 진입점
-├── state.py              # State 정의 + Pydantic 스키마
-├── registry.py           # preset 메타 정보
-├── presets/
-│   ├── chat.py           # create_agent() 래퍼
-│   ├── deep_research.py  # create_deep_agent() 래퍼
-│   └── custom.py         # 수동 StateGraph + State 분리
-└── nodes/
-    ├── preprocess.py     # 입력 전처리
-    ├── worker.py         # 서브 에이전트 패턴 (create_agent)
-    └── postprocessor.py  # 후처리
+src/
+├── graph.py              # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
+└── agents/
+    ├── graph_builder.py  # build_graph() 통합 진입점
+    ├── state.py          # State 정의 + Pydantic 스키마
+    ├── registry.py       # preset 메타 정보
+    ├── presets/
+    │   ├── chat.py       # create_agent() 래퍼
+    │   ├── deep_research.py  # create_deep_agent() 래퍼
+    │   └── custom.py     # 수동 StateGraph + State 분리
+    └── nodes/
+        ├── preprocess.py # 입력 전처리
+        ├── worker.py     # 서브 에이전트 패턴 (create_agent)
+        └── postprocessor.py  # 후처리
 
 app/
 ├── run.py                # 서버 진입점
