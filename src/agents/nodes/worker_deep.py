@@ -6,9 +6,9 @@ planning, filesystem, subagent, summarization 미들웨어가 자동 구성되�
 agents/tools/에 정의된 도구를 import하여 에이전트에 전달합니다.
 
 사용법:
-    custom.py의 build_custom()에서 worker_type="deep"을 지정합니다.
+    custom.py에서 이 모듈을 worker로 import합니다::
 
-    build_custom(worker_type="deep")
+        from agents.nodes import worker_deep as worker
 """
 
 from __future__ import annotations

@@ -109,7 +109,7 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 
 - 모든 preset은 `CompiledStateGraph`를 반환
 - 모든 preset은 `messages: list[AnyMessage]` 입출력 인터페이스를 사용
-- custom preset의 worker 교체는 `worker_type` 파라미터 사용 (`_WORKER_MAP` 패턴)
+- custom preset의 worker 교체는 import를 교체하거나 파일을 복사하여 새 preset으로 등록
 - 주석으로 코드를 on/off 하지 않기
 
 ### 네이밍
@@ -121,7 +121,7 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 | 클래스 | PascalCase | `InputState` |
 | 상수 | UPPER_SNAKE + `_` 접두사(모듈 private) | `_PRESET_DEEP_RESEARCH` |
 | State 내부 필드 | `_` 접두사 | `_worker_outputs` |
-| Literal 타입 | PascalCase | `WorkerType`, `Preset` |
+| Literal 타입 | PascalCase | `Preset` |
 
 ## Git 규칙
 

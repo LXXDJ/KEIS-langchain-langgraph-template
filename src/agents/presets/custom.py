@@ -1,47 +1,36 @@
 """Preset: custom — 수동 StateGraph 노드 조합 방식.
 
 State 분리 패턴(InputState / InternalState / OutputState / Context)과
-노드 안에서 create_agent()를 서브 에이전트로 쓰는 패턴을 보여줍니다.
+노드를 직접 조합하는 패턴을 보여줍니다.
 
 그래프 흐름:
     START → preprocess → worker → postprocessor → END
+
+다른 worker를 사용하려면 ``worker`` import를 교체하세요::
+
+    # create_agent() 기반
+    from agents.nodes import worker_chat as worker
+
+    # create_deep_agent() 기반
+    from agents.nodes import worker_deep as worker
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agents.nodes import postprocessor, preprocess, worker, worker_chat, worker_deep
+from agents.nodes import postprocessor, preprocess, worker
 from agents.state import Context, InputState, OutputState, State
-
-# ── Worker 선택 맵 ─────────────────────────────────────────────
-
-WorkerType = Literal["default", "chat", "deep"]
-
-_WORKER_MAP = {
-    "default": worker,
-    "chat": worker_chat,
-    "deep": worker_deep,
-}
 
 
 # ── 그래프 빌더 ───────────────────────────────────────────────
 
 
-def build_custom(
-    worker_type: WorkerType = "default",
-    **_kwargs: Any,
-) -> CompiledStateGraph:
+def build_custom(**_kwargs: Any) -> CompiledStateGraph:
     """수동 StateGraph 노드 조합으로 그래프를 빌드합니다.
-
-    Args:
-        worker_type: 사용할 worker 구현체.
-            - "default": LLM 없이 테스트용
-            - "chat": create_react_agent() 기반
-            - "deep": create_deep_agent() 기반
 
     그래프 구조:
         START → preprocess → worker → postprocessor → END
@@ -51,14 +40,13 @@ def build_custom(
         - input_schema=InputState: 외부에서 받는 필드만
         - output_schema=OutputState: 외부에 반환하는 필드만
         - context_schema=Context : 런타임 설정 (state에 포함 안 됨)
-    """
-    worker_fn = _WORKER_MAP.get(worker_type)
-    if worker_fn is None:
-        raise ValueError(
-            f"Unknown worker_type={worker_type!r}. "
-            f"Available: {list(_WORKER_MAP)}"
-        )
 
+    worker 교체:
+        기본값은 LLM 없이 테스트용 worker입니다.
+        create_agent() 또는 create_deep_agent() 기반 worker를 사용하려면
+        이 파일의 import를 교체하거나, 이 파일을 복사하여
+        새 preset으로 등록하세요.
+    """
     builder = StateGraph(
         state_schema=State,
         input_schema=InputState,
@@ -67,7 +55,7 @@ def build_custom(
     )
 
     builder.add_node("preprocess", preprocess)
-    builder.add_node("worker", worker_fn)
+    builder.add_node("worker", worker)
     builder.add_node("postprocessor", postprocessor)
 
     builder.add_edge(START, "preprocess")
