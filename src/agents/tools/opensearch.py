@@ -44,12 +44,15 @@ def _get_client() -> Any:
 
     auth = (user, password) if user else None
     use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
+    verify_certs = os.getenv("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
+    ca_certs = os.getenv("OPENSEARCH_CA_CERTS", "") or None
 
     return OpenSearch(
         hosts=[{"host": host, "port": port}],
         http_auth=auth,
         use_ssl=use_ssl,
-        verify_certs=use_ssl,
+        verify_certs=verify_certs if use_ssl else False,
+        ca_certs=ca_certs,
         ssl_show_warn=False,
     )
 
@@ -109,7 +112,16 @@ def search_opensearch(
         source = hit.get("_source", {})
         score = hit.get("_score", 0)
         # TODO: 데이터 형식 확정 후 표시할 필드를 지정하세요.
-        summary = ", ".join(f"{k}: {v}" for k, v in list(source.items())[:5])
-        lines.append(f"{i}. [score={score:.2f}] {summary}")
+        # 임베딩 벡터, 긴 본문 등이 컨텍스트를 오염시키지 않도록
+        # 스칼라 필드만 추출하고 값 길이를 제한합니다.
+        parts: list[str] = []
+        for k, v in list(source.items())[:5]:
+            if isinstance(v, (list, dict)):
+                continue  # 벡터, 중첩 객체 제외
+            text = str(v)
+            if len(text) > 200:
+                text = text[:200] + "…"
+            parts.append(f"{k}: {text}")
+        lines.append(f"{i}. [score={score:.2f}] {', '.join(parts)}")
 
     return "\n".join(lines)
