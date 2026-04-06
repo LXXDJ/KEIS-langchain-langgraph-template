@@ -206,18 +206,48 @@ Deep Agents 외에도 LangChain은 여러 prebuilt middleware를 제공합니다
 - 학습용 / 로컬 실험용
 
 ### Level 2. Practical
-- 기본 제공 + `ToolCallLimitMiddleware`
-- 기본 제공 + `ModelCallLimitMiddleware`
-- 기본 제공 + 필요 시 `ModelFallbackMiddleware`
+
+```python
+from agents.middlewares import (
+    create_model_call_limit_middleware,
+    create_model_fallback_middleware,
+    create_tool_call_limit_middleware,
+)
+
+middleware = [
+    create_tool_call_limit_middleware(max_calls=30),
+    create_model_call_limit_middleware(max_calls=50),
+    create_model_fallback_middleware(models=["openai:gpt-4o", "openai:gpt-4o-mini"]),
+]
+```
 
 실서비스 직전 기본값으로 적합합니다.
 
 ### Level 3. Production
-- Practical 구성 포함
-- `HumanInTheLoopMiddleware`
-- `PIIMiddleware`
-- memory/checkpoint/persistence 구성
-- tracing / observability 추가
+
+```python
+from agents.middlewares import (
+    create_hitl_middleware,
+    create_model_call_limit_middleware,
+    create_model_fallback_middleware,
+    create_model_retry_middleware,
+    create_pii_detection_middleware,
+    create_summarization_middleware,
+    create_tool_call_limit_middleware,
+)
+
+middleware = [
+    create_summarization_middleware(trigger=("tokens", 4000)),
+    create_model_fallback_middleware(models=["openai:gpt-4o", "openai:gpt-4o-mini"]),
+    create_model_retry_middleware(max_retries=3),
+    create_model_call_limit_middleware(max_calls=50),
+    create_tool_call_limit_middleware(max_calls=30),
+    create_hitl_middleware(tools=["send_email", "delete_record"]),
+    create_pii_detection_middleware(),
+]
+```
+
+여기에 memory/checkpoint/persistence, tracing/observability를 추가합니다.
 
 ---
 

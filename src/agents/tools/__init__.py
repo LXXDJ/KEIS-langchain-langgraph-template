@@ -21,12 +21,16 @@ from agents.tools.examples import (
     search_database,
     search_web,
 )
+from agents.tools.opensearch import describe_opensearch_index, search_opensearch
 from agents.tools.skills import list_skills, read_skill
 
 __all__: list[str] = [
     # 스킬 도구
     "list_skills",
     "read_skill",
+    # OpenSearch 검색
+    "search_opensearch",
+    "describe_opensearch_index",
     # 예시 도구 (mock — 실제 서비스에서 구현 교체)
     "get_current_time",
     "search_web",
