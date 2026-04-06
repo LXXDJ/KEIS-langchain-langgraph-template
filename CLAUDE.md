@@ -7,36 +7,6 @@
 LangChain, LangGraph, Deep Agents 기반 에이전트 개발 보일러플레이트 템플릿.
 preset 시스템으로 에이전트 유형을 선택하고, 모든 preset은 동일한 messages 기반 입출력을 사용합니다.
 
-## HyperAgent 설계 원칙
-
-이 프로젝트는 HyperAgent 논문(Zhang et al., 2026, arXiv:2603.19461)의 핵심 개념을 적용합니다.
-HyperAgent는 task agent와 meta agent를 하나의 수정 가능한 프로그램으로 통합하여,
-작업 수행 능력뿐 아니라 자기 개선 메커니즘 자체도 진화시키는 자기참조적 에이전트입니다.
-
-### 이 프로젝트에서의 매핑
-
-| HyperAgent 개념 | 이 프로젝트의 구현 |
-|-----------------|-------------------|
-| **Task Agent** | preset (custom/chat/deep_research) — 실제 작업 수행 |
-| **Meta Agent** | 스킬 시스템 + 미들웨어 — 에이전트의 행동 방식을 수정·확장 |
-| **Editable Program** | `src/agents/` 전체 — 노드, 도구, 프리셋 모두 교체 가능 |
-| **Performance Tracking** | 미들웨어(todo_list, summarization)로 진행 추적 |
-| **Persistent Memory** | 백엔드(filesystem, store)로 지식 축적 |
-| **Metacognitive Self-modification** | 스킬(SKILL.md) — 에이전트가 자신의 지침을 탐색·적용 |
-
-### 설계 가이드라인
-
-1. **작업과 개선을 분리하라**: task agent(preset)와 meta agent(스킬/미들웨어)의 관심사를 분리.
-   task agent는 "무엇을 할지", meta agent는 "어떻게 더 잘할지"에 집중
-2. **모든 것을 수정 가능하게 하라**: 노드, 도구, 프리셋, 스킬 모두 독립적으로 교체·확장 가능한 구조 유지.
-   하드코딩된 메타 레벨 메커니즘은 개선의 병목이 됨
-3. **지식을 축적하라**: 에이전트가 작업 중 발견한 패턴, 환경 제약, 도메인 지식을
-   스킬(SKILL.md)이나 백엔드(persistent memory)에 저장하여 재사용
-4. **개선 과정을 추적하라**: 성능 추적(performance tracking)으로 어떤 변경이 효과적이었는지 기록.
-   미들웨어(todo_list, summarization)가 이 역할을 지원
-5. **도메인 간 전이를 고려하라**: 한 도메인에서 학습한 개선 전략(스킬, 미들웨어 구성)이
-   다른 도메인에서도 유효할 수 있음. 범용적인 메타 전략을 스킬로 정의
-
 ## 실행 방법
 
 ```bash
