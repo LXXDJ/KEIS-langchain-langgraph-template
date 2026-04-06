@@ -23,7 +23,7 @@ Airflow 데이터 파이프라인이 적재한 데이터를 OpenSearch에서 검
 
 from __future__ import annotations
 
-import json
+import functools
 import logging
 import os
 from typing import Any
@@ -32,19 +32,24 @@ from langchain_core.tools import tool
 
 _log = logging.getLogger(__name__)
 
-# ── 결과 포맷 제한 ──────────────────────────────────────────
+# ── 상수 ────────────────────────────────────────────────────
 
 _MAX_FIELD_LENGTH = 200
 _MAX_SOURCE_FIELDS = 8
+_MAX_TOP_K = 20
+_VALID_SORT = {"relevance", "recent", "oldest"}
+_FILTER_SEPARATOR = ";"
 
 
 # ── 클라이언트 ───────────────────────────────────────────────
 
 
+@functools.lru_cache(maxsize=1)
 def _get_client() -> Any:
-    """OpenSearch 클라이언트를 생성합니다.
+    """OpenSearch 클라이언트를 생성하고 캐싱합니다.
 
     ``opensearchpy`` 가 설치되지 않으면 ImportError를 발생시킵니다.
+    환경변수가 변경된 경우 ``_get_client.cache_clear()``로 캐시를 초기화하세요.
     """
     from opensearchpy import OpenSearch
 
@@ -64,6 +69,8 @@ def _get_client() -> Any:
         use_ssl=use_ssl,
         verify_certs=verify_certs if use_ssl else False,
         ca_certs=ca_certs,
+        # 개발 환경의 자체 서명 인증서 경고를 억제합니다.
+        # 운영 환경에서는 OPENSEARCH_VERIFY_CERTS=true + 정식 인증서를 사용하세요.
         ssl_show_warn=False,
     )
 
@@ -114,9 +121,9 @@ def _build_query(
     # ── filter 절 ─────────────────────────────────────────────
     filter_clauses: list[dict[str, Any]] = []
 
-    # filters 파싱: "key1:val1,key2:val2" 형식
+    # filters 파싱: "key1:val1;key2:val2" 형식 (세미콜론 구분)
     if filters:
-        for pair in filters.split(","):
+        for pair in filters.split(_FILTER_SEPARATOR):
             pair = pair.strip()
             if ":" not in pair:
                 continue
@@ -125,10 +132,10 @@ def _build_query(
 
     # date_range 파싱: "field:gte~lte" 형식 (예: "created_at:2026-01-01~2026-03-31")
     if date_range:
-        parts = date_range.split(":")
-        if len(parts) == 2:
-            field_name = parts[0].strip()
-            dates = parts[1].strip().split("~")
+        dr_parts = date_range.split(":", 1)
+        if len(dr_parts) == 2:
+            field_name = dr_parts[0].strip()
+            dates = dr_parts[1].strip().split("~")
             range_clause: dict[str, str] = {}
             if len(dates) >= 1 and dates[0]:
                 range_clause["gte"] = dates[0].strip()
@@ -154,10 +161,9 @@ def _build_query(
         sort_clause = [{"_score": "desc"}, {"created_at": {"order": "desc", "unmapped_type": "date"}}]
     elif sort == "oldest":
         sort_clause = [{"created_at": {"order": "asc", "unmapped_type": "date"}}]
-    # "relevance" (기본값)은 sort 없이 _score 기준
 
     body: dict[str, Any] = {
-        "size": min(top_k, 20),
+        "size": min(top_k, _MAX_TOP_K),
         "query": query_dsl,
     }
     if sort_clause:
@@ -184,12 +190,15 @@ def search_opensearch(
     Args:
         query: 검색 쿼리.
         index: 검색할 인덱스명. 비어 있으면 환경변수 OPENSEARCH_INDEX 사용.
-        filters: 필터 조건. "key:value" 쌍을 쉼표로 구분 (예: "status:완료,부서:구매팀").
+        filters: 필터 조건. "key:value" 쌍을 세미콜론으로 구분 (예: "status:완료;부서:구매팀").
         date_range: 날짜 범위. "필드명:시작~끝" 형식 (예: "created_at:2026-01-01~2026-03-31").
         sort: 정렬 기준. "relevance" (기본), "recent", "oldest".
         fields: 검색 대상 필드. 쉼표 구분 (예: "title,body"). 비어 있으면 전체 필드.
         top_k: 반환할 최대 문서 수 (기본값: 5, 최대: 20).
     """
+    if sort not in _VALID_SORT:
+        return f"유효하지 않은 sort 값입니다: {sort!r}. 허용값: {sorted(_VALID_SORT)}"
+
     target_index = _resolve_index(index)
     if not target_index:
         return "검색할 인덱스가 지정되지 않았습니다. index 인자 또는 OPENSEARCH_INDEX 환경변수를 설정하세요."
@@ -198,17 +207,17 @@ def search_opensearch(
         client = _get_client()
     except ImportError:
         return "opensearch-py 패키지가 설치되지 않았습니다: pip install opensearch-py"
-    except Exception as e:
+    except Exception:
         _log.exception("OpenSearch 연결 실패")
-        return f"OpenSearch 연결 실패: {e}"
+        return "OpenSearch 연결에 실패했습니다. 연결 설정을 확인하세요."
 
     body = _build_query(query, filters, date_range, sort, fields, top_k)
 
     try:
         response = client.search(index=target_index, body=body)
-    except Exception as e:
+    except Exception:
         _log.exception("OpenSearch 검색 실패: index=%s", target_index)
-        return f"검색 실패: {e}"
+        return "검색 중 오류가 발생했습니다. 인덱스명과 쿼리를 확인하세요."
 
     hits = response.get("hits", {}).get("hits", [])
     if not hits:
@@ -235,15 +244,15 @@ def describe_opensearch_index(index: str = "") -> str:
         client = _get_client()
     except ImportError:
         return "opensearch-py 패키지가 설치되지 않았습니다: pip install opensearch-py"
-    except Exception as e:
+    except Exception:
         _log.exception("OpenSearch 연결 실패")
-        return f"OpenSearch 연결 실패: {e}"
+        return "OpenSearch 연결에 실패했습니다. 연결 설정을 확인하세요."
 
     try:
         mapping = client.indices.get_mapping(index=target_index)
-    except Exception as e:
+    except Exception:
         _log.exception("매핑 조회 실패: index=%s", target_index)
-        return f"매핑 조회 실패: {e}"
+        return "매핑 조회 중 오류가 발생했습니다. 인덱스명을 확인하세요."
 
     # 첫 번째 인덱스의 매핑 추출 (alias일 수 있으므로)
     index_name = next(iter(mapping), target_index)
