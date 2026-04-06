@@ -55,8 +55,8 @@ class TestBuildQuery:
         assert {"term": {"status": "완료"}} in filters
         assert {"term": {"부서": "구매팀"}} in filters
 
-    def test_filter_with_colon_in_value(self) -> None:
-        """세미콜론 구분이므로 값에 쉼표가 있어도 안전합니다."""
+    def test_filter_with_comma_in_value(self) -> None:
+        """세미콜론 구분이므로 값에 쉼표가 포함되어도 안전합니다."""
         body = _build_query("test", "설명:구매팀, 2팀", "", "relevance", "", 5)
         filters = body["query"]["bool"]["filter"]
         assert {"term": {"설명": "구매팀, 2팀"}} in filters
@@ -121,5 +121,11 @@ class TestFormatHit:
 
     def test_empty_source(self) -> None:
         hit = {"_score": 0.0, "_source": {}}
+        result = _format_hit(1, hit)
+        assert "score=0.00" in result
+
+    def test_score_none(self) -> None:
+        """sort=oldest 등에서 _score가 None으로 반환되는 경우."""
+        hit = {"_score": None, "_source": {"title": "ok"}}
         result = _format_hit(1, hit)
         assert "score=0.00" in result

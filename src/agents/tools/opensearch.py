@@ -83,7 +83,7 @@ def _resolve_index(index: str) -> str:
 def _format_hit(rank: int, hit: dict[str, Any]) -> str:
     """검색 결과 한 건을 안전하게 포맷합니다."""
     source = hit.get("_source", {})
-    score = hit.get("_score", 0)
+    score = hit.get("_score") or 0.0
 
     parts: list[str] = []
     for k, v in list(source.items())[:_MAX_SOURCE_FIELDS]:
@@ -156,11 +156,13 @@ def _build_query(
         query_dsl = must_clause
 
     # ── sort ──────────────────────────────────────────────────
+    sort_field = os.getenv("OPENSEARCH_SORT_FIELD", "created_at")
+
     sort_clause: list[Any] | None = None
     if sort == "recent":
-        sort_clause = [{"_score": "desc"}, {"created_at": {"order": "desc", "unmapped_type": "date"}}]
+        sort_clause = [{"_score": "desc"}, {sort_field: {"order": "desc", "unmapped_type": "date"}}]
     elif sort == "oldest":
-        sort_clause = [{"created_at": {"order": "asc", "unmapped_type": "date"}}]
+        sort_clause = [{sort_field: {"order": "asc", "unmapped_type": "date"}}]
 
     body: dict[str, Any] = {
         "size": min(top_k, _MAX_TOP_K),
