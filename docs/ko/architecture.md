@@ -98,25 +98,24 @@ src/
 ├── graph.py              # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
 └── agents/
     ├── graph_builder.py  # build_graph() 통합 진입점
-    ├── state.py          # State 정의 + Pydantic 스키마
+    ├── state.py          # State 정의 (Input/Internal/Output/Context)
     ├── registry.py       # preset 메타 정보
-    ├── presets/
-    │   ├── chat.py       # create_agent() 래퍼
-    │   ├── deep_research.py  # create_deep_agent() 래퍼
-    │   └── custom.py     # 수동 StateGraph + State 분리
-    └── nodes/
-        ├── preprocess.py # 입력 전처리
-        ├── worker.py     # 서브 에이전트 패턴 (create_agent)
-        └── postprocessor.py  # 후처리
+    ├── presets/          # 그래프 빌더 (custom, chat, deep_research)
+    ├── nodes/            # 노드 함수 (preprocess, worker, postprocessor)
+    ├── tools/            # 도구 — OpenSearch 검색, 스킬 조회, 예시(mock)
+    ├── backends/         # 백엔드 팩토리 (filesystem, shell, composite, store)
+    ├── middlewares/      # 미들웨어 팩토리 12종
+    └── skills/           # 스킬 경로 해석 유틸
 
+skills/                   # SKILL.md 파일 (에이전트가 탐색·조회)
 app/
 ├── run.py                # 서버 진입점
 └── utils/
     ├── server.py         # LangServe 기반 서빙
-    ├── langgraph_loader.py # langgraph.json 파싱
+    ├── langgraph_loader.py # langgraph.json 파싱 + 그래프 동적 로드
     └── schema.py         # langgraph.json용 dataclass
 
-langgraph.json            # 서비스 설정 (name, version, graphs 등)
+langgraph.json            # 서비스 설정 (preset, graphs, name, version)
 ```
 
 ---

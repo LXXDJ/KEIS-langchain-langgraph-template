@@ -63,15 +63,21 @@ def _get_client() -> Any:
     verify_certs = os.getenv("OPENSEARCH_VERIFY_CERTS", "true").lower() == "true"
     ca_certs = os.getenv("OPENSEARCH_CA_CERTS", "") or None
 
+    if use_ssl and not verify_certs:
+        _log.warning(
+            "OPENSEARCH_VERIFY_CERTS=false — 운영 환경에서는 정식 인증서를 사용하세요."
+        )
+
     return OpenSearch(
         hosts=[{"host": host, "port": port}],
         http_auth=auth,
         use_ssl=use_ssl,
         verify_certs=verify_certs if use_ssl else False,
         ca_certs=ca_certs,
-        # 개발 환경의 자체 서명 인증서 경고를 억제합니다.
-        # 운영 환경에서는 OPENSEARCH_VERIFY_CERTS=true + 정식 인증서를 사용하세요.
-        ssl_show_warn=False,
+        ssl_show_warn=verify_certs,
+        timeout=10,
+        max_retries=2,
+        retry_on_timeout=True,
     )
 
 
@@ -218,6 +224,7 @@ def search_opensearch(
     try:
         response = client.search(index=target_index, body=body)
     except Exception:
+        _get_client.cache_clear()
         _log.exception("OpenSearch 검색 실패: index=%s", target_index)
         return "검색 중 오류가 발생했습니다. 인덱스명과 쿼리를 확인하세요."
 
@@ -253,6 +260,7 @@ def describe_opensearch_index(index: str = "") -> str:
     try:
         mapping = client.indices.get_mapping(index=target_index)
     except Exception:
+        _get_client.cache_clear()
         _log.exception("매핑 조회 실패: index=%s", target_index)
         return "매핑 조회 중 오류가 발생했습니다. 인덱스명을 확인하세요."
 

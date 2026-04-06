@@ -5,6 +5,8 @@ OpenSearch 연결 없이 DSL 빌더, 포맷터, 인덱스 해석 등 순수 함�
 
 from __future__ import annotations
 
+import pytest
+
 from agents.tools.opensearch import (
     _VALID_SORT,
     _build_query,
@@ -22,11 +24,11 @@ class TestResolveIndex:
     def test_explicit_index(self) -> None:
         assert _resolve_index("my-index") == "my-index"
 
-    def test_env_fallback(self, monkeypatch) -> None:
+    def test_env_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENSEARCH_INDEX", "env-index")
         assert _resolve_index("") == "env-index"
 
-    def test_empty(self, monkeypatch) -> None:
+    def test_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OPENSEARCH_INDEX", raising=False)
         assert _resolve_index("") == ""
 
@@ -37,55 +39,71 @@ class TestResolveIndex:
 class TestBuildQuery:
     """DSL 빌더 테스트."""
 
-    def test_basic_query(self) -> None:
+    def test_basic_query(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("검색어", "", "", "relevance", "", 5)
         assert body["size"] == 5
         assert body["query"]["multi_match"]["query"] == "검색어"
         assert body["query"]["multi_match"]["fields"] == ["*"]
         assert "sort" not in body
 
-    def test_with_fields(self) -> None:
+    def test_with_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "", "relevance", "title,body", 5)
         assert body["query"]["multi_match"]["fields"] == ["title", "body"]
 
-    def test_with_filters(self) -> None:
+    def test_with_filters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "status:완료;부서:구매팀", "", "relevance", "", 5)
         filters = body["query"]["bool"]["filter"]
         assert len(filters) == 2
         assert {"term": {"status": "완료"}} in filters
         assert {"term": {"부서": "구매팀"}} in filters
 
-    def test_filter_with_comma_in_value(self) -> None:
+    def test_filter_with_comma_in_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """세미콜론 구분이므로 값에 쉼표가 포함되어도 안전합니다."""
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "설명:구매팀, 2팀", "", "relevance", "", 5)
         filters = body["query"]["bool"]["filter"]
         assert {"term": {"설명": "구매팀, 2팀"}} in filters
 
-    def test_with_date_range(self) -> None:
+    def test_with_date_range(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "created_at:2026-01-01~2026-03-31", "relevance", "", 5)
         filters = body["query"]["bool"]["filter"]
         assert len(filters) == 1
         assert filters[0] == {"range": {"created_at": {"gte": "2026-01-01", "lte": "2026-03-31"}}}
 
-    def test_date_range_gte_only(self) -> None:
+    def test_date_range_gte_only(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "created_at:2026-01-01~", "relevance", "", 5)
         range_filter = body["query"]["bool"]["filter"][0]
         assert range_filter == {"range": {"created_at": {"gte": "2026-01-01"}}}
 
-    def test_sort_recent(self) -> None:
+    def test_sort_recent(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "", "recent", "", 5)
         assert "sort" in body
         assert body["sort"][1]["created_at"]["order"] == "desc"
 
-    def test_sort_oldest(self) -> None:
+    def test_sort_oldest(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "", "oldest", "", 5)
         assert body["sort"][0]["created_at"]["order"] == "asc"
 
-    def test_top_k_capped(self) -> None:
+    def test_sort_custom_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """OPENSEARCH_SORT_FIELD로 정렬 필드를 변경할 수 있습니다."""
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "updated_at")
+        body = _build_query("test", "", "", "recent", "", 5)
+        assert "updated_at" in body["sort"][1]
+
+    def test_top_k_capped(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query("test", "", "", "relevance", "", 100)
         assert body["size"] == 20
 
-    def test_combined_filters_and_date(self) -> None:
+    def test_combined_filters_and_date(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENSEARCH_SORT_FIELD", "created_at")
         body = _build_query(
             "test", "status:완료", "created_at:2026-01-01~2026-12-31", "relevance", "", 5,
         )
