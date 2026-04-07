@@ -300,6 +300,7 @@ async def test_preset_e2e_returns_json_ai_message(
     assert isinstance(last, AIMessage)
 
     payload = json.loads(last.content)
+    assert payload["query"] == "서울 카페 아르바이트"
     assert payload["summary"].startswith("테스트 요약")
     assert payload["primary"] == {
         "category": "채용",
@@ -315,6 +316,12 @@ async def test_preset_e2e_returns_json_ai_message(
     ]
     assert payload["related_queries"] == ["연관1", "연관2"]
     assert payload["related_jobs"] == ["대분류 > 중분류 > 데이터 분석가"]
+    # meta: 결정론적 필드(ranking, result_count)는 정확히 비교, 시각은 형태만 검증
+    meta = payload["meta"]
+    assert meta["ranking"] == ["채용", "정책", "훈련"]
+    assert meta["result_count"] == len(fake_results)
+    assert isinstance(meta["fetched_at"], str)
+    assert meta["fetched_at"].endswith("+00:00")
 
 
 async def test_preset_e2e_handles_empty_query(
@@ -336,10 +343,19 @@ async def test_preset_e2e_handles_empty_query(
     last = result["messages"][-1]
     assert isinstance(last, AIMessage)
     payload = json.loads(last.content)
+    # 결정론적 필드는 정확히, meta.fetched_at 만 형태 검증.
+    fetched_at = payload["meta"].pop("fetched_at")
+    assert isinstance(fetched_at, str)
+    assert fetched_at.endswith("+00:00")
     assert payload == {
+        "query": "",
         "summary": "",
         "primary": {"category": "", "url": "", "title": ""},
         "related_categories": [],
         "related_queries": [],
         "related_jobs": [],
+        "meta": {
+            "ranking": [],
+            "result_count": 0,
+        },
     }

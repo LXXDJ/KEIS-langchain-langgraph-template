@@ -60,6 +60,7 @@ GPT-4o mini를 선택한 이유:
 
 ```json
 {
+  "query": "AI 직업훈련",
   "summary": "한국어 2~3줄 요약 텍스트",
   "primary": {
     "category": "훈련",
@@ -68,10 +69,15 @@ GPT-4o mini를 선택한 이유:
   },
   "related_categories": [
     {"category": "정책", "url": "...", "title": "..."},
-    {"category": "훈련", "url": "...", "title": "..."}
+    {"category": "직업·진로", "url": "...", "title": "..."}
   ],
   "related_queries": ["연관검색어1", "연관검색어2", "..."],
-  "related_jobs": ["대분류 > 중분류 > 직종명1", "대분류 > 중분류 > 직종명2"]
+  "related_jobs": ["대분류 > 중분류 > 직종명1", "대분류 > 중분류 > 직종명2"],
+  "meta": {
+    "ranking": ["훈련", "직업·진로", "정책", "채용", "자격", "기업", "신고·신청", "뉴스·자료", "기타"],
+    "result_count": 26,
+    "fetched_at": "2026-04-07T06:42:11+00:00"
+  }
 }
 ```
 
@@ -80,13 +86,20 @@ GPT-4o mini를 선택한 이유:
 의도된 구조입니다. 1순위 결과가 없으면 `primary` 는 세 필드가 모두 빈 문자열인
 빈 카드(`{"category": "", "url": "", "title": ""}`)가 됩니다.
 
-| 필드 | 출처 | 최대 개수 |
+| 필드 | 설명 | 비고 |
 |---|---|---|
-| `summary` | LLM 생성 (GPT-4o mini) | 2~3줄 / 200자 이내 |
-| `primary` | 1순위 카테고리의 top1 결과 카드 (`{category, url, title}`) | 1 |
-| `related_categories` | 2·3순위 카테고리에서 각 1개씩 | 2 |
-| `related_queries` | work24 페이지의 `form_keyword1` 영역 | 5 |
-| `related_jobs` | work24 페이지의 `form_keyword2` 영역 | 2 |
+| `query` | 호출자가 보낸 검색어 (preprocess 로 strip 됨) | 응답을 self-contained 로 만들기 위해 함께 echo |
+| `summary` | LLM 생성 한국어 요약 | 2~3줄 / 200자 이내 |
+| `primary` | 1순위 카테고리의 top1 결과 카드 | `{category, url, title}` |
+| `related_categories` | 2·3순위 카테고리에서 각 1개씩 | 같은 카드 모양, 최대 2개 |
+| `related_queries` | work24 페이지의 `form_keyword1` 영역 | 최대 5개 |
+| `related_jobs` | work24 페이지의 `form_keyword2` 영역 | 최대 2개 |
+| `meta.ranking` | 의도 분류 LLM 이 매긴 9개 카테고리 우선순위 전체 | 디버깅·분석용 |
+| `meta.result_count` | work24 에서 가져와 정규화한 전체 결과 건수 | 디버깅·모니터링용 |
+| `meta.fetched_at` | 응답 생성 시각 (UTC ISO 8601, 초 단위) | 캐시·로그 정합성용 |
+
+`meta` 는 화면에 직접 노출할 의무 없이, 호출자가 디버깅·로그·캐시 정합성·A/B 분석에
+참고할 수 있도록 부수적으로 담아 두는 영역입니다.
 
 ---
 
@@ -255,7 +268,7 @@ state["messages"] (입력)
    navigation: dict
         │
         ▼
-   ⑦ payload = {summary, primary, related_categories, related_queries, related_jobs}
+   ⑦ payload = {query, summary, primary, related_categories, related_queries, related_jobs, meta}
         json.dumps(...) → _worker_outputs 에 push
 ```
 
@@ -299,11 +312,17 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     navigation = _build_navigation(results, ranking, related_queries, related_jobs)
 
     payload = {
+        "query": query,
         "summary": summary,
         "primary": navigation["primary"],
         "related_categories": navigation["related_categories"],
         "related_queries": navigation["related_queries"],
         "related_jobs": navigation["related_jobs"],
+        "meta": {
+            "ranking": ranking,
+            "result_count": len(results),
+            "fetched_at": _now_iso(),
+        },
     }
     return {
         "_worker_outputs": [
@@ -715,11 +734,13 @@ async def main():
         {"messages": [HumanMessage("AI 직업훈련")]}
     )
     payload = json.loads(result["messages"][-1].content)
+    print(payload["query"])                # echo 된 검색어
     print(payload["summary"])
     print(payload["primary"])              # {"category", "url", "title"}
     print(payload["related_categories"])   # 같은 모양의 카드 리스트
     print(payload["related_queries"])
     print(payload["related_jobs"])
+    print(payload["meta"])                 # ranking / result_count / fetched_at
 
 asyncio.run(main())
 ```

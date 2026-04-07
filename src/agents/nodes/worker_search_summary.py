@@ -17,6 +17,7 @@ HTML 스크래핑으로 결과를 가져옵니다. 공식 API 가 제공되면 �
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 from typing import Any
@@ -507,6 +508,11 @@ def _extract_query(state: State) -> str:
     return ""
 
 
+def _now_iso() -> str:
+    """현재 시각을 UTC ISO 8601 (초 단위) 문자열로 반환합니다."""
+    return datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
+
+
 async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     """SVC-3 worker — 고용24 검색 결과를 한국어 2~3줄로 요약합니다.
 
@@ -517,11 +523,17 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     query = _extract_query(state)
     if not query:
         empty_payload = {
+            "query": "",
             "summary": "",
             "primary": dict(_EMPTY_NAVIGATION_ITEM),
             "related_categories": [],
             "related_queries": [],
             "related_jobs": [],
+            "meta": {
+                "ranking": [],
+                "result_count": 0,
+                "fetched_at": _now_iso(),
+            },
         }
         return {
             "_worker_outputs": [
@@ -539,11 +551,17 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     navigation = _build_navigation(results, ranking, related_queries, related_jobs)
 
     payload = {
+        "query": query,
         "summary": summary,
         "primary": navigation["primary"],
         "related_categories": navigation["related_categories"],
         "related_queries": navigation["related_queries"],
         "related_jobs": navigation["related_jobs"],
+        "meta": {
+            "ranking": ranking,
+            "result_count": len(results),
+            "fetched_at": _now_iso(),
+        },
     }
 
     return {
