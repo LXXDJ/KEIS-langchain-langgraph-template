@@ -20,6 +20,8 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import os
+from functools import lru_cache
 from typing import Any
 
 import httpx
@@ -47,7 +49,77 @@ _WORK24_USER_AGENT = (
 
 # ── 상수 / 프롬프트 ──────────────────────────────────────────────
 
-_MODEL_ID = "openai:gpt-4o-mini"
+# 환경변수 LLM_MODEL 미설정 시 사용할 기본 모델.
+_DEFAULT_MODEL_ID = "openai:gpt-4o-mini"
+
+# init_chat_model 이 인식하는 provider prefix 들. LLM_MODEL 에 prefix 가 없으면
+# openai 로 자동 보정한다 (auto-prefix).
+_KNOWN_PROVIDERS: frozenset[str] = frozenset({
+    "openai",
+    "anthropic",
+    "google_genai",
+    "google_vertexai",
+    "azure_openai",
+    "bedrock",
+    "cohere",
+    "fireworks",
+    "groq",
+    "huggingface",
+    "mistralai",
+    "ollama",
+    "together",
+    "xai",
+})
+
+
+class _InvalidModelIdError(ValueError):
+    """LLM_MODEL 환경변수 형식이 잘못되었을 때 발생."""
+
+
+def _resolve_model_id(raw: str | None = None) -> str:
+    """``LLM_MODEL`` 환경변수를 읽어 ``provider:model`` 형식 문자열을 반환합니다.
+
+    동작:
+    - 미설정/공백 → ``_DEFAULT_MODEL_ID``
+    - ``"gpt-4o-mini"`` 처럼 prefix 가 없으면 ``"openai:"`` 자동 부착
+    - ``"openai:gpt-4o-mini"`` 처럼 정상 형식이면 그대로 사용
+    - 알 수 없는 provider prefix 면 ``_InvalidModelIdError``
+
+    Args:
+        raw: 테스트에서 직접 값을 주입할 때 사용. 기본은 ``os.getenv``.
+    """
+    value = (raw if raw is not None else os.getenv("LLM_MODEL", "")).strip()
+    if not value:
+        return _DEFAULT_MODEL_ID
+
+    if ":" not in value:
+        # auto-prefix: 그냥 모델명만 적은 경우 openai 로 가정.
+        return f"openai:{value}"
+
+    provider, _, model = value.partition(":")
+    provider = provider.strip().lower()
+    model = model.strip()
+    if provider not in _KNOWN_PROVIDERS:
+        raise _InvalidModelIdError(
+            f"LLM_MODEL='{value}' 의 provider '{provider}' 를 인식할 수 없습니다. "
+            f"알려진 provider: {', '.join(sorted(_KNOWN_PROVIDERS))}"
+        )
+    if not model:
+        raise _InvalidModelIdError(
+            f"LLM_MODEL='{value}' 에 모델 이름이 비어 있습니다 "
+            "(예: 'openai:gpt-4o-mini')."
+        )
+    return f"{provider}:{model}"
+
+
+@lru_cache(maxsize=1)
+def _model_id() -> str:
+    """``_resolve_model_id`` 결과를 프로세스 단위로 캐싱합니다.
+
+    환경변수는 프로세스 기동 후 바뀌지 않는다고 가정하므로 한 번만 평가하면 됩니다.
+    검증 실패는 첫 호출 시점에 즉시 raise 되어 운영 환경에서 빠르게 드러납니다.
+    """
+    return _resolve_model_id()
 
 # 고용24 통합검색의 9개 결과 카테고리.
 # work24의 "전체" 탭은 이들을 한 화면에 모은 필터일 뿐 별도 결과 섹션이 아니므로
@@ -451,10 +523,13 @@ def _build_navigation(
 async def _classify_intent(query: str) -> list[str]:
     """검색어 의도를 분류해 카테고리 우선순위 리스트를 반환합니다.
 
-    실패 시 ``_DEFAULT_CATEGORY_RANKING`` 을 반환합니다.
+    LLM 호출이 실패하면 ``_DEFAULT_CATEGORY_RANKING`` 을 반환합니다. 단,
+    ``LLM_MODEL`` 환경변수 형식이 잘못된 ``_InvalidModelIdError`` 는 운영자가
+    즉시 인지해야 하는 설정 오류이므로 fallback 하지 않고 그대로 raise 합니다.
     """
+    model = _model_id()  # _InvalidModelIdError 는 여기서 raise (fallback 안 함)
     try:
-        llm = init_chat_model(_MODEL_ID).with_structured_output(_IntentResult)
+        llm = init_chat_model(model).with_structured_output(_IntentResult)
         result = await llm.ainvoke(
             [
                 SystemMessage(content=_INTENT_SYSTEM_PROMPT),
@@ -476,10 +551,13 @@ async def _classify_intent(query: str) -> list[str]:
 async def _summarize(query: str, selected: list[dict[str, Any]]) -> str:
     """선별된 결과로 한국어 2~3줄 요약을 생성합니다.
 
-    실패 시 top-1 결과의 title을 fallback으로 반환합니다.
+    LLM 호출이 실패하면 top-1 결과의 title을 fallback으로 반환합니다. 단,
+    ``LLM_MODEL`` 환경변수 형식이 잘못된 ``_InvalidModelIdError`` 는 설정 오류
+    이므로 fallback 하지 않고 그대로 raise 합니다.
     """
+    model = _model_id()  # _InvalidModelIdError 는 여기서 raise (fallback 안 함)
     try:
-        llm = init_chat_model(_MODEL_ID)
+        llm = init_chat_model(model)
         payload = json.dumps(selected, ensure_ascii=False)
         result = await llm.ainvoke(
             [

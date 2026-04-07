@@ -773,11 +773,38 @@ curl -X POST http://localhost:8000/agent/invoke \
 | 변수 | 필수 | 기본값 | 설명 |
 |---|---|---|---|
 | `OPENAI_API_KEY` | ✅ | — | 의도 분류 + 요약에 사용. 없으면 fallback 으로만 동작 |
+| `LLM_MODEL` | | `openai:gpt-4o-mini` | 의도 분류·요약에 쓰는 모델. `provider:model-id` 형식 |
 | `HOST` | | `0.0.0.0` | LangServe bind host |
 | `PORT` | | `8000` | LangServe bind port |
 | `RELOAD` | | `true` | uvicorn auto-reload (개발용) |
 
 `.env.example` 을 복사해서 사용하세요. 자세한 사용은 [.env.example](.env.example) 참고.
+
+### `LLM_MODEL` 형식 자세히
+
+`init_chat_model("provider:model-id")` 형식을 따릅니다. 모델 ID 는 langchain 이
+공식 지원하는 provider 만 사용 가능합니다.
+
+```bash
+LLM_MODEL=openai:gpt-4o-mini                       # 기본
+LLM_MODEL=openai:gpt-4o                            # 더 정확한 요약
+LLM_MODEL=anthropic:claude-haiku-4-5-20251001      # Anthropic
+LLM_MODEL=gpt-4o-mini                              # prefix 생략 → openai 자동 보정
+```
+
+세 가지 안전장치:
+
+1. **자동 prefix** — `LLM_MODEL=gpt-4o-mini` 처럼 provider 없이 모델명만 적으면
+   `openai:` 가 자동 부착됩니다.
+2. **provider 검증** — 알려진 provider (openai / anthropic / google_genai /
+   azure_openai / bedrock / cohere / fireworks / groq / huggingface / mistralai /
+   ollama / together / xai) 가 아니면 그래프 첫 호출 시점에 명확한 에러로
+   실패합니다 (`_InvalidModelIdError`).
+3. **빈 모델명 검증** — `LLM_MODEL=openai:` 처럼 모델 부분이 비어 있으면 동일하게
+   에러로 실패합니다.
+
+`OPENAI_API_KEY` 외에 다른 provider 를 쓰려면 그 provider 가 요구하는 API 키도
+함께 설정해야 합니다 (예: `ANTHROPIC_API_KEY`).
 
 ## 안정성 — 모든 실패 지점에 fallback
 

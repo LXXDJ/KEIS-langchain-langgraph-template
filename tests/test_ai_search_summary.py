@@ -208,6 +208,39 @@ def test_build_navigation_caps_related_jobs_at_2() -> None:
     assert nav["related_jobs"] == ["job1", "job2"]
 
 
+# ── 단위 테스트: _resolve_model_id ───────────────────────────────
+
+
+def test_resolve_model_id_default_when_unset() -> None:
+    assert wss._resolve_model_id(None) == wss._DEFAULT_MODEL_ID
+    assert wss._resolve_model_id("") == wss._DEFAULT_MODEL_ID
+    assert wss._resolve_model_id("   ") == wss._DEFAULT_MODEL_ID
+
+
+def test_resolve_model_id_passes_through_valid_prefix() -> None:
+    assert wss._resolve_model_id("openai:gpt-4o-mini") == "openai:gpt-4o-mini"
+    assert (
+        wss._resolve_model_id("anthropic:claude-haiku-4-5-20251001")
+        == "anthropic:claude-haiku-4-5-20251001"
+    )
+
+
+def test_resolve_model_id_auto_prefixes_openai() -> None:
+    """prefix 가 없으면 openai 로 자동 보정."""
+    assert wss._resolve_model_id("gpt-4o-mini") == "openai:gpt-4o-mini"
+    assert wss._resolve_model_id("gpt-4o") == "openai:gpt-4o"
+
+
+def test_resolve_model_id_rejects_unknown_provider() -> None:
+    with pytest.raises(wss._InvalidModelIdError):
+        wss._resolve_model_id("madeup_provider:some-model")
+
+
+def test_resolve_model_id_rejects_empty_model_part() -> None:
+    with pytest.raises(wss._InvalidModelIdError):
+        wss._resolve_model_id("openai:")
+
+
 # ── 단위 테스트: _classify_intent fallback ───────────────────────
 
 
