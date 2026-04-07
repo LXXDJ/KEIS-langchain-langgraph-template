@@ -285,7 +285,6 @@ LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 키에서 U
 - `/agent/stream` — 스트리밍
 - `/agent/playground/` — Playground UI
 - `/health` — 서비스 상태 확인
-- `/presets` — 사용 가능한 preset 목록
 - `/docs` — Swagger UI
 
 ## 환경변수

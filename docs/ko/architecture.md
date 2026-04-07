@@ -99,7 +99,6 @@ src/
 └── agents/
     ├── graph_builder.py  # build_graph() 통합 진입점
     ├── state.py          # State 정의 (Input/Internal/Output/Context)
-    ├── registry.py       # preset 메타 정보
     ├── presets/          # 그래프 빌더 (custom, chat, deep_research)
     ├── nodes/            # 노드 함수 (preprocess, worker, postprocessor)
     ├── tools/            # 도구 — OpenSearch 검색, 스킬 조회, 예시(mock)

@@ -6,6 +6,10 @@ build_graph()는 preset 파라미터로 에이전트 유형을 선택합니다:
   - "custom"        : 수동 StateGraph 노드 조합 (기존 방식)
 
 모든 preset은 CompiledStateGraph를 반환하므로 LangServe에 바로 연결 가능합니다.
+
+새 preset 추가 절차:
+  1. `src/agents/presets/{name}.py` 에 `build_{name}()` 함수 생성
+  2. 아래 `_BUILDERS` 에 한 줄 추가 + `Preset` Literal 에 이름 추가
 """
 
 from __future__ import annotations
@@ -18,13 +22,16 @@ from agents.presets.chat import build_chat
 from agents.presets.custom import build_custom
 from agents.presets.deep_research import build_deep_research
 
-Preset = Literal["chat", "deep_research", "custom"]
+# ── preset 등록 (단일 진실의 원천) ─────────────────────────────
+# 새 preset을 추가할 때는 _BUILDERS 와 Preset Literal 두 곳을 함께 업데이트하세요.
 
 _BUILDERS: dict[str, Any] = {
     "chat": build_chat,
     "deep_research": build_deep_research,
     "custom": build_custom,
 }
+
+Preset = Literal["chat", "deep_research", "custom"]
 
 
 def build_graph(

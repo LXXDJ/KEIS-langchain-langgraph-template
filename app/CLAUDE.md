@@ -18,7 +18,7 @@ app/
 - `app/` 에서 노드 함수나 State TypedDict를 직접 정의하지 않기
 - 에이전트 관련 import는 `agents` 패키지의 공개 API만 사용:
   ```python
-  from agents import build_graph, list_presets
+  from agents import build_graph
   ```
 - `langgraph.json`을 파싱하여 서비스 이름, URI 경로 등을 동적으로 결정
 - preset별 LangServe 설정이 다를 경우 `server.py`에서 분기 (상수 사용, magic string 금지)

@@ -61,8 +61,7 @@ src/
       ├─ backends/   # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
       ├─ middlewares/ # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
       ├─ _utils.py   # 패키지 내부 공통 유틸 (find_project_root 등)
-      ├─ state.py    # State 정의 (이 파일 하나에서만 관리)
-      └─ registry.py # preset 메타 정보
+      └─ state.py    # State 정의 (이 파일 하나에서만 관리)
 skills/              # SKILL.md 파일 모음 (에이전트가 조회·실행하는 스킬 정의)
 app/                 # 서빙 레이어 (FastAPI + LangServe)
   └─ utils/          # 서버 팩토리, langgraph.json 로더, 스키마
@@ -74,7 +73,7 @@ examples/            # preset별 사용 예시
 ### 새 파일 위치 규칙
 
 - 새 노드 → `src/agents/nodes/` 에 추가하고 `src/agents/nodes/__init__.py`에 export
-- 새 preset → `src/agents/presets/` 에 추가하고 `src/agents/presets/__init__.py`에 export, `src/agents/registry.py`에 메타 등록
+- 새 preset → `src/agents/presets/{name}.py` 에 빌더 함수 작성 후 `src/agents/graph_builder.py`의 `_BUILDERS` 맵과 `Preset` Literal에 등록
 - 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `src/agents/tools/`
 - 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성 (64KB 이하 권장 — LLM 컨텍스트로 전달됨)
 - 새 백엔드 → `src/agents/backends/` 에 추가하고 `__init__.py`에 export

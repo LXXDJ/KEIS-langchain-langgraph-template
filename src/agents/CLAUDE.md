@@ -8,10 +8,9 @@
 
 ```
 src/agents/
-├─ __init__.py        # 공개 API만 export (build_graph, list_presets, State 등)
+├─ __init__.py        # 공개 API만 export (build_graph, State 등)
 ├─ graph_builder.py   # build_graph(preset=...) — 유일한 그래프 생성 진입점
 ├─ state.py           # State 정의 — 이 파일에서만 TypedDict 관리
-├─ registry.py        # preset 메타 정보 (PresetInfo)
 ├─ presets/           # 그래프 빌더 함수
 ├─ nodes/             # 개별 노드 함수 (async only)
 ├─ tools/             # 범용 도구 (@tool)
@@ -30,12 +29,10 @@ src/agents/
 
 ### preset
 
-1. `src/agents/presets/` 에 `build_{name}()` 함수 생성
-2. 반환 타입은 반드시 `CompiledStateGraph`
-3. messages 기반 입출력 인터페이스 유지
-4. `src/agents/presets/__init__.py` 에 export 추가
-5. `src/agents/registry.py` 에 `PresetInfo` 등록
-6. `src/agents/graph_builder.py` 의 `Preset` Literal과 `_BUILDERS` 맵에 추가
+1. `src/agents/presets/{name}.py` 에 `build_{name}()` 함수 생성
+   - 반환 타입은 반드시 `CompiledStateGraph`
+   - messages 기반 입출력 인터페이스 유지
+2. `src/agents/graph_builder.py` 의 `_BUILDERS` 맵과 `Preset` Literal 에 이름 추가
 
 ### worker
 
