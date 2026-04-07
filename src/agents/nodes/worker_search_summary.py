@@ -48,9 +48,10 @@ _WORK24_USER_AGENT = (
 
 _MODEL_ID = "openai:gpt-4o-mini"
 
-# 고용24 통합검색 카테고리 (전체 + 9개 분류).
+# 고용24 통합검색의 9개 결과 카테고리.
+# work24의 "전체" 탭은 이들을 한 화면에 모은 필터일 뿐 별도 결과 섹션이 아니므로
+# ranking 후보에서 제외한다 (포함하면 LLM이 의미 없는 안전선택으로 늘 1순위로 잡음).
 _ALL_CATEGORIES: list[str] = [
-    "전체",
     "신고·신청",
     "정책",
     "채용",
@@ -189,14 +190,24 @@ def _extract_li_meta(li: Tag) -> dict[str, Any]:
     return {"items": items} if items else {}
 
 
+def _is_placeholder_title(title: str) -> bool:
+    """결과 카운트("9", "0") 같은 placeholder li의 title 패턴인지 판단."""
+    if not title:
+        return True
+    # 숫자 + 단위만 있는 경우 (예: "0", "9", "62,370")
+    bare = title.replace(",", "").replace(".", "").strip()
+    return bare.isdigit()
+
+
 def _parse_li(li: Tag, category: str) -> dict[str, Any] | None:
     """``<li>`` 하나를 정규화된 결과 dict로 변환합니다.
 
-    URL과 title 둘 다 비어있으면 placeholder/no-result 항목으로 보고 None 반환.
+    URL과 title 둘 다 비어있거나 title이 placeholder(숫자만)인 경우
+    None을 반환합니다.
     """
     url = _extract_li_url(li)
     title = _extract_li_title(li)
-    if not url and not title:
+    if not url and (not title or _is_placeholder_title(title)):
         return None
     return {
         "title": title,
