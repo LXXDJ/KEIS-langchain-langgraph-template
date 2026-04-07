@@ -249,10 +249,10 @@ state["messages"] (입력)
         │                                  │
         └──────────┬───────────────────────┘
                    ▼
-   ④ _select_top_k_by_category(results, ranking, k=5)   (결정론, LLM 미사용)
+   ④ _select_top_k_by_category(results, ranking, k=SUMMARY_INPUT_COUNT)   (결정론, LLM 미사용)
         │
         ▼
-   selected: list[dict]  (요약 LLM 에 넘길 핵심 결과 5건)
+   selected: list[dict]  (요약 LLM 에 넘길 핵심 결과 SUMMARY_INPUT_COUNT 건)
         │
         ▼
    ⑤ _summarize(query, selected)
@@ -305,9 +305,14 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
         # 빈 query → LLM/HTTP 호출 생략, 빈 payload 즉시 반환
         ...
 
+    search_result_count = _search_result_count()      # SEARCH_RESULT_COUNT (env)
+    summary_input_count = _summary_input_count()      # SUMMARY_INPUT_COUNT (env)
+
     ranking = await _classify_intent(query)
-    results, related_queries, related_jobs = await fetch_work24_search(query)
-    selected = _select_top_k_by_category(results, ranking, k=5)
+    results, related_queries, related_jobs = await fetch_work24_search(
+        query, list_count=search_result_count
+    )
+    selected = _select_top_k_by_category(results, ranking, k=summary_input_count)
     summary = await _summarize(query, selected)
     navigation = _build_navigation(results, ranking, related_queries, related_jobs)
 
@@ -383,7 +388,7 @@ work24 통합검색 페이지를 그대로 GET 해서 HTML 을 받고 `_parse_wo
 
 ```python
 async def fetch_work24_search(
-    query: str, *, list_count: int = 20,
+    query: str, *, list_count: int = _DEFAULT_SEARCH_RESULT_COUNT,
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     if not query:
         return [], [], []
@@ -424,8 +429,9 @@ async def fetch_work24_search(
   파라미터가 누락되면 일부 동적 영역(연관검색어 등)이 다르게 렌더링되어 사용자가
   브라우저에서 보는 결과와 어긋납니다. 브라우저가 실제로 보내는 파라미터셋을 그대로
   복제해 두었습니다.
-- **`list_count=20`**: 카테고리당 최대 20개. 너무 작으면 요약 LLM 이 볼 컨텍스트가
-  빈약하고, 너무 크면 토큰/지연이 증가합니다. 20이 현재 균형점.
+- **`list_count`**: 카테고리당 최대 N개. 기본 20 이며 환경변수
+  `SEARCH_RESULT_COUNT` 로 1~100 사이에서 조정 가능. 너무 작으면 navigation
+  카드가 빈약해지고, 너무 크면 한 호출이 무거워집니다.
 - **명시적 User-Agent**: httpx 기본 UA 가 차단될 가능성을 피해 Chrome UA 로 위장.
 - **`timeout=5.0`**: 한 번의 검색에 5초 이상 걸리면 그냥 빈 결과로 fallback.
   사용자 경험상 검색 결과 페이지 상단에 5초 이상 걸리는 카드는 아예 없는 게 낫습니다.
@@ -514,12 +520,14 @@ def _select_top_k_by_category(
     return sorted_results[:k]
 ```
 
-이 5개가 ⑤ 요약 LLM 의 컨텍스트로 들어갑니다. 더 많이 넣으면 토큰만 늘고 요약 품질에는
-도움이 안 되며, 적게 넣으면 요약이 빈약해집니다. 5가 현재 균형점.
+이 N건이 ⑤ 요약 LLM 의 컨텍스트로 들어갑니다. 기본값은 5 이며 환경변수
+`SUMMARY_INPUT_COUNT` 로 1~100 사이에서 조정 가능합니다. 더 많이 넣으면 토큰·지연이
+늘고, 너무 적게 넣으면 요약이 빈약해집니다. 5가 현재 균형점.
 
 #### ⑤ 요약 — `_summarize` ([worker_search_summary.py:468](src/agents/nodes/worker_search_summary.py#L468))
 
-선별된 5건을 JSON 으로 직렬화해서 GPT-4o mini 에 넘기고 한국어 2~3줄을 받습니다.
+선별된 결과(`SUMMARY_INPUT_COUNT` 건)를 JSON 으로 직렬화해서 GPT-4o mini 에 넘기고
+한국어 2~3줄을 받습니다.
 시스템 프롬프트에 "200자 이내, 평문, 추측 금지, 결과에 근거" 같은 제약을 걸어
 출력 톤을 일관되게 유지합니다.
 
@@ -774,6 +782,8 @@ curl -X POST http://localhost:8000/agent/invoke \
 |---|---|---|---|
 | `OPENAI_API_KEY` | ✅ | — | 의도 분류 + 요약에 사용. 없으면 fallback 으로만 동작 |
 | `LLM_MODEL` | | `openai:gpt-4o-mini` | 의도 분류·요약에 쓰는 모델. `provider:model-id` 형식 |
+| `SEARCH_RESULT_COUNT` | | `20` | work24 에서 카테고리당 받아올 결과 개수 (1~100) |
+| `SUMMARY_INPUT_COUNT` | | `5` | 요약 LLM 에 입력으로 넘길 결과 개수 (1~100) |
 | `HOST` | | `0.0.0.0` | LangServe bind host |
 | `PORT` | | `8000` | LangServe bind port |
 | `RELOAD` | | `true` | uvicorn auto-reload (개발용) |
@@ -805,6 +815,45 @@ LLM_MODEL=gpt-4o-mini                              # prefix 생략 → openai �
 
 `OPENAI_API_KEY` 외에 다른 provider 를 쓰려면 그 provider 가 요구하는 API 키도
 함께 설정해야 합니다 (예: `ANTHROPIC_API_KEY`).
+
+### `SEARCH_RESULT_COUNT` / `SUMMARY_INPUT_COUNT` 자세히
+
+두 변수는 같은 "결과 개수"지만 그래프의 다른 단계에 영향을 줍니다.
+
+```
+work24 호출
+   │
+   ▼
+results (전체 풀)  ← SEARCH_RESULT_COUNT 가 결정
+   │              ── 카테고리당 최대 N개씩 받아옴
+   │              ── 9개 카테고리 합쳐 보통 13~40건
+   │
+   ├─ navigation 만드는 데 사용 (primary, related_categories, meta.result_count)
+   │  → 풀이 클수록 1~3순위 카테고리에 결과가 있을 확률 ↑
+   │
+   ▼
+selected (부분집합)  ← SUMMARY_INPUT_COUNT 가 결정
+   │                ── ranking 우선순위 정렬 후 상위 N건
+   │
+   ▼
+요약 LLM 입력
+```
+
+| 변수 | 무엇을 결정 | 늘리면 | 줄이면 |
+|---|---|---|---|
+| `SEARCH_RESULT_COUNT` | work24 에서 카테고리당 받아올 결과 개수 | navigation 다양성 ↑, 응답 무거움 | navigation 빈약 |
+| `SUMMARY_INPUT_COUNT` | 요약 LLM 에 입력으로 넘길 결과 개수 | 요약 풍부, LLM 토큰·비용·지연 ↑ | 요약 빈약, 토큰 절약 |
+
+선별 동작은 **카테고리 우선순위 순서로 stable sort 후 앞에서부터 N건**:
+
+> 예: `SUMMARY_INPUT_COUNT=10` 이고 ranking 1순위가 "훈련" (8건), 2순위가
+> "직업·진로" (3건) 이면, 훈련 8건 + 직업·진로 2건 = 10건이 LLM 에 들어갑니다.
+> 1순위 카테고리에 결과가 충분하면 그 카테고리만으로 채워질 수 있습니다.
+
+검증:
+- 1~100 범위의 정수만 허용
+- 정수가 아니거나 범위를 벗어나면 그래프 첫 호출 시점에 `_InvalidCountError`
+  로 즉시 실패 (운영자가 설정 오류를 즉시 인지하도록)
 
 ## 안정성 — 모든 실패 지점에 fallback
 

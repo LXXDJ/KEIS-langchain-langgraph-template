@@ -241,6 +241,42 @@ def test_resolve_model_id_rejects_empty_model_part() -> None:
         wss._resolve_model_id("openai:")
 
 
+# ── 단위 테스트: _resolve_positive_int (count 환경변수) ─────────
+
+
+def test_resolve_positive_int_default_when_unset() -> None:
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw=None) == 20
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="") == 20
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="   ") == 20
+
+
+def test_resolve_positive_int_passes_through_valid() -> None:
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="1") == 1
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="42") == 42
+    assert wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="100") == 100
+
+
+def test_resolve_positive_int_rejects_non_integer() -> None:
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="abc")
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="3.14")
+
+
+def test_resolve_positive_int_rejects_zero_and_negative() -> None:
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="0")
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="-5")
+
+
+def test_resolve_positive_int_rejects_above_max() -> None:
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="101")
+    with pytest.raises(wss._InvalidCountError):
+        wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="9999")
+
+
 # ── 단위 테스트: _classify_intent fallback ───────────────────────
 
 

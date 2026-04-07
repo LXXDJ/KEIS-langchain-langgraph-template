@@ -121,6 +121,74 @@ def _model_id() -> str:
     """
     return _resolve_model_id()
 
+
+# ── 결과 개수 환경변수 ──────────────────────────────────────────
+
+# work24 에서 카테고리당 받아올 결과 개수의 기본값.
+_DEFAULT_SEARCH_RESULT_COUNT = 20
+# 요약 LLM 에 입력으로 넘길 결과 개수의 기본값.
+_DEFAULT_SUMMARY_INPUT_COUNT = 5
+# 환경변수가 받을 수 있는 양의 정수 범위 (1 ~ MAX). work24 한 호출이
+# 너무 무거워지거나 LLM 토큰이 폭증하는 것을 막기 위한 안전 상한.
+_COUNT_MIN = 1
+_COUNT_MAX = 100
+
+
+class _InvalidCountError(ValueError):
+    """결과 개수 환경변수가 정수가 아니거나 허용 범위를 벗어났을 때 발생."""
+
+
+def _resolve_positive_int(
+    env_name: str,
+    default: int,
+    *,
+    raw: str | None = None,
+) -> int:
+    """양의 정수 환경변수를 읽어 검증한 값을 반환합니다.
+
+    동작:
+    - 미설정/공백 → ``default``
+    - 정상 정수(``_COUNT_MIN`` ~ ``_COUNT_MAX``) → 그 값
+    - 정수가 아니거나 범위를 벗어나면 ``_InvalidCountError``
+
+    Args:
+        env_name: 환경변수 이름 (에러 메시지에만 사용)
+        default: 미설정 시 사용할 값
+        raw: 테스트에서 직접 값을 주입할 때 사용. 기본은 ``os.getenv``.
+    """
+    value = (raw if raw is not None else os.getenv(env_name, "")).strip()
+    if not value:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise _InvalidCountError(
+            f"{env_name}='{value}' 를 정수로 해석할 수 없습니다."
+        ) from exc
+    if parsed < _COUNT_MIN or parsed > _COUNT_MAX:
+        raise _InvalidCountError(
+            f"{env_name}={parsed} 가 허용 범위를 벗어났습니다 "
+            f"({_COUNT_MIN}~{_COUNT_MAX})."
+        )
+    return parsed
+
+
+@lru_cache(maxsize=1)
+def _search_result_count() -> int:
+    """``SEARCH_RESULT_COUNT`` 를 한 번만 평가해 캐싱합니다."""
+    return _resolve_positive_int(
+        "SEARCH_RESULT_COUNT", _DEFAULT_SEARCH_RESULT_COUNT
+    )
+
+
+@lru_cache(maxsize=1)
+def _summary_input_count() -> int:
+    """``SUMMARY_INPUT_COUNT`` 를 한 번만 평가해 캐싱합니다."""
+    return _resolve_positive_int(
+        "SUMMARY_INPUT_COUNT", _DEFAULT_SUMMARY_INPUT_COUNT
+    )
+
+
 # 고용24 통합검색의 9개 결과 카테고리.
 # work24의 "전체" 탭은 이들을 한 화면에 모은 필터일 뿐 별도 결과 섹션이 아니므로
 # ranking 후보에서 제외한다 (포함하면 LLM이 의미 없는 안전선택으로 늘 1순위로 잡음).
@@ -377,7 +445,7 @@ def _parse_work24_html(
 async def fetch_work24_search(
     query: str,
     *,
-    list_count: int = 20,
+    list_count: int = _DEFAULT_SEARCH_RESULT_COUNT,
 ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
     """고용24 통합검색을 호출해 정규화된 결과 + 연관검색어 + 연관직종을 반환합니다.
 
@@ -622,9 +690,16 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
             ]
         }
 
+    # 결과 개수 환경변수는 첫 호출 시점에 검증 → 잘못된 값이면 _InvalidCountError
+    # 가 raise 되어 운영자가 즉시 인지하도록 한다 (LLM_MODEL 과 동일 패턴).
+    search_result_count = _search_result_count()
+    summary_input_count = _summary_input_count()
+
     ranking = await _classify_intent(query)
-    results, related_queries, related_jobs = await fetch_work24_search(query)
-    selected = _select_top_k_by_category(results, ranking, k=5)
+    results, related_queries, related_jobs = await fetch_work24_search(
+        query, list_count=search_result_count
+    )
+    selected = _select_top_k_by_category(results, ranking, k=summary_input_count)
     summary = await _summarize(query, selected)
     navigation = _build_navigation(results, ranking, related_queries, related_jobs)
 
