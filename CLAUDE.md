@@ -155,6 +155,35 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 | State 내부 필드 | `_` 접두사 | `_worker_outputs` |
 | Literal 타입 | PascalCase | `Preset` |
 
+## 로컬 서버 백그라운드 운영 규칙
+
+Claude Code 가 LangServe 서버를 백그라운드로 띄울 때 좀비 프로세스를
+남기지 않기 위한 규칙. (실제로 이전에 같은 실수가 반복되어 정착됨.)
+
+1. **백그라운드로 띄울 때는 항상 ``RELOAD=false``**
+   uvicorn 의 ``--reload`` 는 부모 + 자식 워커 두 프로세스를 만들기 때문에
+   부모만 죽이면 자식이 포트를 잡고 남는다. 검증·디버깅 목적의 단발성
+   기동에는 reload 가 불필요하므로 무조건 끈다.
+   ```bash
+   PORT=8001 RELOAD=false uv run python -m app.run    # 좋음
+   ```
+
+2. **종료는 셸 job control(``kill %1``) 대신 PID 기반으로**
+   매 Bash 호출이 새 셸이라 ``%1`` 같은 job spec 은 의미가 없다.
+   ``netstat -ano | grep ':PORT.*LISTENING'`` 로 PID 를 찾고
+   ``Stop-Process -Id <PID> -Force`` (powershell) 또는
+   harness 의 ``KillBash`` 도구로 직접 종료한다.
+
+3. **종료 직후에 반드시 검증**
+   "명령은 실행했으니 죽었겠지" 로 넘어가지 않는다. 종료 명령 후
+   ``netstat`` 으로 포트가 비었는지, ``Get-Process python`` 으로 프로세스가
+   사라졌는지 한 번 더 확인한다. 안 죽었으면 다른 방법으로 다시 시도.
+
+4. **포트가 안 비면 우회**
+   netstat 에는 LISTENING 으로 보이는데 ``Get-Process`` 에는 해당 PID 가
+   없는 경우 — Windows 커널의 TCP 소켓 leak. 이때는 같은 PID 를 죽이려
+   하지 말고 다른 포트로 띄운다 (``PORT=8001``).
+
 ## Git 규칙
 
 - 브랜치: `main` → `feat/기능명` 분기
