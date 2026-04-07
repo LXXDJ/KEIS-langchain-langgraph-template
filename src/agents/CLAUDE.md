@@ -32,7 +32,7 @@ src/agents/
 1. `src/agents/presets/{name}.py` 에 `build_{name}()` 함수 생성
    - 반환 타입은 반드시 `CompiledStateGraph`
    - messages 기반 입출력 인터페이스 유지
-2. `src/agents/graph_builder.py` 의 `_BUILDERS` 맵과 `Preset` Literal 에 이름 추가
+2. `src/agents/graph_builder.py` 의 `_BUILDERS` 맵에 `"{name}": build_{name}` 한 줄 추가
 
 ### worker
 

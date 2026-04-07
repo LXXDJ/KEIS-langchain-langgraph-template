@@ -9,12 +9,12 @@ build_graph()는 preset 파라미터로 에이전트 유형을 선택합니다:
 
 새 preset 추가 절차:
   1. `src/agents/presets/{name}.py` 에 `build_{name}()` 함수 생성
-  2. 아래 `_BUILDERS` 에 한 줄 추가 + `Preset` Literal 에 이름 추가
+  2. 아래 `_BUILDERS` 에 한 줄 추가
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from langgraph.graph.state import CompiledStateGraph
 
@@ -23,7 +23,7 @@ from agents.presets.custom import build_custom
 from agents.presets.deep_research import build_deep_research
 
 # ── preset 등록 (단일 진실의 원천) ─────────────────────────────
-# 새 preset을 추가할 때는 _BUILDERS 와 Preset Literal 두 곳을 함께 업데이트하세요.
+# 새 preset을 추가하려면 이 dict 에 한 줄만 추가하세요.
 
 _BUILDERS: dict[str, Any] = {
     "chat": build_chat,
@@ -31,11 +31,9 @@ _BUILDERS: dict[str, Any] = {
     "custom": build_custom,
 }
 
-Preset = Literal["chat", "deep_research", "custom"]
-
 
 def build_graph(
-    preset: Preset = "custom",
+    preset: str = "custom",
     **kwargs: Any,
 ) -> CompiledStateGraph:
     """프로젝트 기본 진입점. preset으로 에이전트 유형을 선택합니다.
@@ -46,6 +44,9 @@ def build_graph(
 
     Returns:
         CompiledStateGraph — LangServe add_routes()에 바로 연결 가능
+
+    Raises:
+        ValueError: 등록되지 않은 preset 이름인 경우
 
     Examples:
         # 기본 (LLM 없이 테스트용)

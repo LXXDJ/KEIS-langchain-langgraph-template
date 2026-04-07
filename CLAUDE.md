@@ -73,7 +73,7 @@ examples/            # preset별 사용 예시
 ### 새 파일 위치 규칙
 
 - 새 노드 → `src/agents/nodes/` 에 추가하고 `src/agents/nodes/__init__.py`에 export
-- 새 preset → `src/agents/presets/{name}.py` 에 빌더 함수 작성 후 `src/agents/graph_builder.py`의 `_BUILDERS` 맵과 `Preset` Literal에 등록
+- 새 preset → `src/agents/presets/{name}.py` 에 빌더 함수 작성 후 `src/agents/graph_builder.py`의 `_BUILDERS` 맵에 한 줄 추가
 - 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `src/agents/tools/`
 - 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성 (64KB 이하 권장 — LLM 컨텍스트로 전달됨)
 - 새 백엔드 → `src/agents/backends/` 에 추가하고 `__init__.py`에 export
@@ -152,7 +152,6 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 | 클래스 | PascalCase | `InputState` |
 | 상수 | UPPER_SNAKE + `_` 접두사(모듈 private) | `_PRESET_DEEP_RESEARCH` |
 | State 내부 필드 | `_` 접두사 | `_worker_outputs` |
-| Literal 타입 | PascalCase | `Preset` |
 
 ## Git 규칙
 
