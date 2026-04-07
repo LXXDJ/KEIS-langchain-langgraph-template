@@ -49,8 +49,17 @@ async def run(query: str) -> None:
     print("📝 요약:")
     print(f"  {payload.get('summary', '')}")
     print()
-    print("🔗 원문 URL:")
-    print(f"  {payload.get('primary_url', '') or '(없음)'}")
+    print("🔗 1순위 결과:")
+    primary = payload.get("primary") or {}
+    if primary.get("url") or primary.get("title"):
+        cat = primary.get("category", "")
+        title = primary.get("title", "")
+        url = primary.get("url", "")
+        print(f"  - [{cat}] {title}")
+        if url:
+            print(f"    {url}")
+    else:
+        print("  (없음)")
     print()
     print("📂 추가 탐색 경로:")
     related_categories = payload.get("related_categories", [])

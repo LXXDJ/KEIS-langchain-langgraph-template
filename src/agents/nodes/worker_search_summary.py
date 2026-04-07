@@ -390,6 +390,9 @@ def _select_top_k_by_category(
     return sorted_results[:k]
 
 
+_EMPTY_NAVIGATION_ITEM: dict[str, Any] = {"category": "", "url": "", "title": ""}
+
+
 def _build_navigation(
     results: list[dict[str, Any]],
     ranking: list[str],
@@ -398,7 +401,10 @@ def _build_navigation(
 ) -> dict[str, Any]:
     """navigation dict 구성.
 
-    - primary_url: 1순위 카테고리에서 첫 번째 결과의 URL
+    primary 와 related_categories 는 모두 ``{category, url, title}`` 형태로
+    동일한 모양을 가진다 (UI 가 같은 카드 컴포넌트로 처리할 수 있도록).
+
+    - primary: 1순위 카테고리의 첫 번째 결과
     - related_categories: 2·3순위 카테고리에서 각 1개씩
     - related_queries: 연관검색어 (최대 5개)
     - related_jobs: 연관직종 (최대 2개)
@@ -407,30 +413,31 @@ def _build_navigation(
     for r in results:
         by_category.setdefault(r.get("category", ""), []).append(r)
 
-    def _first(category: str) -> dict[str, Any] | None:
+    def _card(category: str) -> dict[str, Any] | None:
         items = by_category.get(category, [])
-        return items[0] if items else None
+        if not items:
+            return None
+        item = items[0]
+        return {
+            "category": category,
+            "url": item.get("url", ""),
+            "title": item.get("title", ""),
+        }
 
-    primary_url = ""
+    primary: dict[str, Any] = dict(_EMPTY_NAVIGATION_ITEM)
     if ranking:
-        top = _first(ranking[0])
+        top = _card(ranking[0])
         if top:
-            primary_url = top.get("url", "")
+            primary = top
 
     related_categories: list[dict[str, Any]] = []
     for cat in ranking[1:3]:
-        item = _first(cat)
-        if item:
-            related_categories.append(
-                {
-                    "category": cat,
-                    "url": item.get("url", ""),
-                    "title": item.get("title", ""),
-                }
-            )
+        card = _card(cat)
+        if card:
+            related_categories.append(card)
 
     return {
-        "primary_url": primary_url,
+        "primary": primary,
         "related_categories": related_categories,
         "related_queries": related_queries[:5],
         "related_jobs": related_jobs[:2],
@@ -511,7 +518,7 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     if not query:
         empty_payload = {
             "summary": "",
-            "primary_url": "",
+            "primary": dict(_EMPTY_NAVIGATION_ITEM),
             "related_categories": [],
             "related_queries": [],
             "related_jobs": [],
@@ -533,7 +540,7 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
 
     payload = {
         "summary": summary,
-        "primary_url": navigation["primary_url"],
+        "primary": navigation["primary"],
         "related_categories": navigation["related_categories"],
         "related_queries": navigation["related_queries"],
         "related_jobs": navigation["related_jobs"],

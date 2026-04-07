@@ -161,7 +161,11 @@ def test_build_navigation_picks_primary_and_related() -> None:
         related_jobs=["대분류 > 직종A"],
     )
 
-    assert nav["primary_url"] == "u-recruit"
+    assert nav["primary"] == {
+        "category": "채용",
+        "url": "u-recruit",
+        "title": "t-recruit",
+    }
     assert nav["related_categories"] == [
         {"category": "정책", "url": "u-policy", "title": "t-policy"},
         {"category": "훈련", "url": "u-train", "title": "t-train"},
@@ -176,8 +180,8 @@ def test_build_navigation_handles_missing_categories() -> None:
     nav = wss._build_navigation(
         results, ranking, related_queries=[], related_jobs=[]
     )
-    # 1순위(채용) 결과 없음 → primary_url 빈 문자열
-    assert nav["primary_url"] == ""
+    # 1순위(채용) 결과 없음 → primary 는 빈 카드 dict
+    assert nav["primary"] == {"category": "", "url": "", "title": ""}
     # 2순위(정책)는 있음, 3순위(훈련)는 없음
     assert len(nav["related_categories"]) == 1
     assert nav["related_categories"][0]["category"] == "정책"
@@ -297,7 +301,11 @@ async def test_preset_e2e_returns_json_ai_message(
 
     payload = json.loads(last.content)
     assert payload["summary"].startswith("테스트 요약")
-    assert payload["primary_url"] == "https://example.com/recruit"
+    assert payload["primary"] == {
+        "category": "채용",
+        "url": "https://example.com/recruit",
+        "title": "샘플 채용",
+    }
     assert payload["related_categories"] == [
         {
             "category": "정책",
@@ -330,7 +338,7 @@ async def test_preset_e2e_handles_empty_query(
     payload = json.loads(last.content)
     assert payload == {
         "summary": "",
-        "primary_url": "",
+        "primary": {"category": "", "url": "", "title": ""},
         "related_categories": [],
         "related_queries": [],
         "related_jobs": [],

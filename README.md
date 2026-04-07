@@ -61,7 +61,11 @@ GPT-4o mini를 선택한 이유:
 ```json
 {
   "summary": "한국어 2~3줄 요약 텍스트",
-  "primary_url": "1순위 카테고리의 top1 결과 URL",
+  "primary": {
+    "category": "훈련",
+    "url": "https://www.work24.go.kr/...",
+    "title": "AI 융합 백엔드 개발자 과정"
+  },
   "related_categories": [
     {"category": "정책", "url": "...", "title": "..."},
     {"category": "훈련", "url": "...", "title": "..."}
@@ -71,10 +75,15 @@ GPT-4o mini를 선택한 이유:
 }
 ```
 
+`primary` 와 `related_categories` 의 각 항목은 모두 동일한 ``{category, url, title}``
+모양을 가집니다. UI 가 같은 카드 컴포넌트로 1순위와 2·3순위를 일관되게 그릴 수 있도록
+의도된 구조입니다. 1순위 결과가 없으면 `primary` 는 세 필드가 모두 빈 문자열인
+빈 카드(`{"category": "", "url": "", "title": ""}`)가 됩니다.
+
 | 필드 | 출처 | 최대 개수 |
 |---|---|---|
 | `summary` | LLM 생성 (GPT-4o mini) | 2~3줄 / 200자 이내 |
-| `primary_url` | 1순위 카테고리의 top1 결과 URL | 1 |
+| `primary` | 1순위 카테고리의 top1 결과 카드 (`{category, url, title}`) | 1 |
 | `related_categories` | 2·3순위 카테고리에서 각 1개씩 | 2 |
 | `related_queries` | work24 페이지의 `form_keyword1` 영역 | 5 |
 | `related_jobs` | work24 페이지의 `form_keyword2` 영역 | 2 |
@@ -246,7 +255,7 @@ state["messages"] (입력)
    navigation: dict
         │
         ▼
-   ⑦ payload = {summary, primary_url, related_categories, related_queries, related_jobs}
+   ⑦ payload = {summary, primary, related_categories, related_queries, related_jobs}
         json.dumps(...) → _worker_outputs 에 push
 ```
 
@@ -291,7 +300,7 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
 
     payload = {
         "summary": summary,
-        "primary_url": navigation["primary_url"],
+        "primary": navigation["primary"],
         "related_categories": navigation["related_categories"],
         "related_queries": navigation["related_queries"],
         "related_jobs": navigation["related_jobs"],
@@ -530,10 +539,13 @@ LLM 호출이 실패하면 top-1 결과의 title 을 그대로 echo 합니다. �
 
 순수 함수 — primary URL, 추가 탐색 경로, 연관검색어/직종 을 dict 로 묶습니다.
 
-- `primary_url` ← ranking 1순위 카테고리에서 첫 번째 결과의 URL
-- `related_categories` ← ranking 2·3순위에서 각 1개씩
+- `primary` ← ranking 1순위 카테고리에서 첫 번째 결과의 카드 `{category, url, title}`
+- `related_categories` ← ranking 2·3순위에서 각 1개씩, primary 와 동일한 모양
 - `related_queries` ← 파서가 뽑아둔 연관검색어 (캡: 5)
 - `related_jobs` ← 파서가 뽑아둔 연관직종 (캡: 2)
+
+primary 와 related_categories 는 같은 dict 모양을 공유하므로 호출자가 동일한
+카드 컴포넌트로 1순위와 2·3순위를 동시에 처리할 수 있습니다.
 
 #### ⑦ 출력 직렬화
 
@@ -673,8 +685,9 @@ uv run python scripts/try_search_summary.py "ai"
   개발자 과정을 2026년부터 2027년까지 진행하며, 훈련 시간은 총 1408시간입니다.
   ...
 
-🔗 원문 URL:
-  https://www.work24.go.kr/hr/a/a/3100/selectTracseDetl.do?tracseId=...
+🔗 1순위 결과:
+  - [훈련] AI 융합 백엔드 개발자 과정
+    https://www.work24.go.kr/hr/a/a/3100/selectTracseDetl.do?tracseId=...
 
 📂 추가 탐색 경로:
   - [채용] 우리와 함께 미래를 만들어갈 AI 교육 강사를 찾습니다.
@@ -703,8 +716,8 @@ async def main():
     )
     payload = json.loads(result["messages"][-1].content)
     print(payload["summary"])
-    print(payload["primary_url"])
-    print(payload["related_categories"])
+    print(payload["primary"])              # {"category", "url", "title"}
+    print(payload["related_categories"])   # 같은 모양의 카드 리스트
     print(payload["related_queries"])
     print(payload["related_jobs"])
 
