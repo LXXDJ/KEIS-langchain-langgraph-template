@@ -15,3 +15,6 @@ wheels/
 
 # Agent outputs
 outputs/
+
+# omc
+.omc/
