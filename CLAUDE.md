@@ -23,8 +23,7 @@
    memory에 저장하여 다음 세션에서 활용하라
 4. **성능 추적**: PR 리뷰에서 반복 지적되는 항목, 테스트 실패 패턴, 빌드 이슈 등을
    추적하고, 같은 실수를 반복하지 마라
-5. **전이 학습**: 한 작업에서 배운 전략(예: OpenSearch 도구 설계 시 의도 기반 파라미터 패턴)을
-   유사한 새 작업에 적용하라
+5. **전이 학습**: 한 작업에서 배운 전략을 유사한 새 작업에 적용하라
 
 ### 자기개선 트리거
 
@@ -36,51 +35,53 @@
 
 ## 프로젝트 개요
 
-LangChain, LangGraph, Deep Agents 기반 에이전트 개발 보일러플레이트 템플릿.
-preset 시스템으로 에이전트 유형을 선택하고, 모든 preset은 동일한 messages 기반 입출력을 사용합니다.
+**SVC-3 — 고용24(work24.go.kr) 통합검색 결과를 GPT-4o mini로 한국어 2~3줄 요약하는 단일 에이전트 서비스.**
+
+원래 LangChain/LangGraph/Deep Agents 기반의 멀티 preset 보일러플레이트에서 출발했지만,
+SVC-3 전용으로 정리되어 사용 가능한 preset은 `ai_search_summary` 하나입니다.
+서비스의 상세 동작과 출력 스키마는 [README.md](README.md)를 참고하세요.
 
 ## 실행 방법
 
 ```bash
-cp .env.example .env   # OPENAI_API_KEY 등 설정
-# langgraph.json의 "preset" 필드로 에이전트 유형 선택 (custom, chat, deep_research)
-./scripts/run-local.sh # uv 기반 로컬 실행
-./scripts/run-docker.sh # Docker 실행
+cp .env.example .env   # OPENAI_API_KEY 설정 필수
+./scripts/run-local.sh        # LangServe 로컬 실행 (8000번 포트)
+./scripts/run-docker.sh       # Docker 실행
+
+# 서버 없이 그래프를 직접 호출
+uv run python scripts/try_search_summary.py "AI 직업훈련"
 ```
 
-## 폴더 구조 규칙
+## 폴더 구조
 
 ```
 src/
-  ├─ graph.py        # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
-  └─ agents/         # 에이전트 구현 (그래프, 노드, 상태, 프리셋)
-      ├─ presets/    # 그래프 빌더 함수 (build_custom, build_chat, build_deep_research)
-      ├─ nodes/      # 개별 노드 함수 (async only)
-      ├─ tools/      # 범용 도구 (@tool). worker 전용 도구는 해당 worker 파일 안에 정의
-      ├─ skills/     # 스킬 경로 해석 유틸 (_resolver.py)
-      ├─ backends/   # 백엔드 구현 (파일시스템, 스토리지, 메모리 등)
-      ├─ middlewares/ # 커스텀 미들웨어 (운영 정책: 요약, fallback, 로깅 등)
-      ├─ _utils.py   # 패키지 내부 공통 유틸 (find_project_root 등)
-      ├─ state.py    # State 정의 (이 파일 하나에서만 관리)
-      └─ registry.py # preset 메타 정보
-skills/              # SKILL.md 파일 모음 (에이전트가 조회·실행하는 스킬 정의)
-app/                 # 서빙 레이어 (FastAPI + LangServe)
-  └─ utils/          # 서버 팩토리, langgraph.json 로더, 스키마
-docs/ko/             # 한국어 문서
-scripts/             # 실행 스크립트
-examples/            # preset별 사용 예시
+  ├─ graph.py             # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
+  └─ agents/
+      ├─ presets/
+      │  └─ ai_search_summary.py   # 유일한 preset 빌더
+      ├─ nodes/
+      │  ├─ preprocess.py          # 입력 messages 정규화
+      │  ├─ worker_search_summary.py  # SVC-3 핵심 worker (LLM + HTTP + 파서)
+      │  └─ postprocessor.py       # _worker_outputs → AIMessage 변환
+      ├─ _utils.py        # find_project_root 등
+      ├─ state.py         # State 정의 (이 파일 하나에서만 관리)
+      ├─ registry.py      # preset 메타 정보
+      └─ graph_builder.py # build_graph(preset=...) 진입점
+app/                      # 서빙 레이어 (FastAPI + LangServe)
+  └─ utils/               # 서버 팩토리, langgraph.json 로더, 스키마
+tests/
+  ├─ test_ai_search_summary.py
+  └─ fixtures/work24_sample.html
+scripts/                  # 실행 스크립트 + 수동 테스트 CLI
 ```
 
 ### 새 파일 위치 규칙
 
 - 새 노드 → `src/agents/nodes/` 에 추가하고 `src/agents/nodes/__init__.py`에 export
-- 새 preset → `src/agents/presets/` 에 추가하고 `src/agents/presets/__init__.py`에 export, `src/agents/registry.py`에 메타 등록
-- 새 도구(@tool) → 특정 worker 전용이면 해당 worker 파일 안에 정의, 범용이면 `src/agents/tools/`
-- 새 스킬 → `skills/` 에 디렉토리 생성 후 `SKILL.md` 작성 (64KB 이하 권장 — LLM 컨텍스트로 전달됨)
-- 새 백엔드 → `src/agents/backends/` 에 추가하고 `__init__.py`에 export
-- 새 미들웨어 → `src/agents/middlewares/` 에 추가하고 `__init__.py`에 export
+- 새 preset → `src/agents/presets/` 에 추가하고 `__init__.py` export + `registry.py` + `graph_builder.py`의 `Preset` Literal과 `_BUILDERS` 등록
+- worker 전용 도구(@tool, fetcher 등) → 해당 worker 파일 안에 정의
 - 서빙 관련 유틸 → `app/utils/`
-- 문서 → `docs/ko/`
 
 ### 금지 사항
 
@@ -141,23 +142,22 @@ async def my_node(state: State, **kwargs: Any) -> dict[str, Any]:
 
 - 모든 preset은 `CompiledStateGraph`를 반환
 - 모든 preset은 `messages: list[AnyMessage]` 입출력 인터페이스를 사용
-- custom preset의 worker 교체는 import를 교체하거나 파일을 복사하여 새 preset으로 등록
 - 주석으로 코드를 on/off 하지 않기
 
 ### 네이밍
 
 | 대상 | 규칙 | 예시 |
 |------|------|------|
-| 파일명 | snake_case | `worker_chat.py` |
-| 함수 | snake_case | `build_custom()` |
+| 파일명 | snake_case | `worker_search_summary.py` |
+| 함수 | snake_case | `build_ai_search_summary()` |
 | 클래스 | PascalCase | `InputState` |
-| 상수 | UPPER_SNAKE + `_` 접두사(모듈 private) | `_PRESET_DEEP_RESEARCH` |
+| 상수 | UPPER_SNAKE + `_` 접두사(모듈 private) | `_DEFAULT_CATEGORY_RANKING` |
 | State 내부 필드 | `_` 접두사 | `_worker_outputs` |
 | Literal 타입 | PascalCase | `Preset` |
 
 ## Git 규칙
 
-- 브랜치: `dev` → `feat/기능명` 분기
+- 브랜치: `main` → `feat/기능명` 분기
 - 커밋 메시지: 한국어 본문, conventional commits prefix (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`)
 - `.env` 파일은 절대 커밋하지 않기 (`.gitignore`에 포함됨)
 - `.idea/`, `__pycache__/`, `.venv/` 커밋하지 않기

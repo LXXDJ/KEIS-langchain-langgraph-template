@@ -3,11 +3,14 @@
 langgraph.json의 ``preset`` 필드를 읽어 해당 에이전트 그래프를 빌드합니다.
 이 모듈의 ``graph`` 변수가 LangServe에 연결되는 최종 진입점입니다.
 
+이 레포는 SVC-3 (고용24 검색 결과 요약) 전용으로 정리되어 있어
+사용 가능한 preset은 ``ai_search_summary`` 하나입니다.
+
 langgraph.json 예시::
 
     {
       "graphs": {"agent": "./src/graph.py:graph"},
-      "preset": "deep_research"
+      "preset": "ai_search_summary"
     }
 """
 
@@ -20,12 +23,12 @@ from agents._utils import find_project_root
 
 
 def _read_preset() -> str:
-    """langgraph.json에서 preset 값을 읽습니다. 없으면 'custom'을 반환합니다."""
+    """langgraph.json에서 preset 값을 읽습니다. 없으면 기본값을 반환합니다."""
     config_path = find_project_root() / "langgraph.json"
     if not config_path.exists():
-        return "custom"
+        return "ai_search_summary"
     raw = json.loads(config_path.read_text(encoding="utf-8"))
-    return raw.get("preset", "custom")
+    return raw.get("preset", "ai_search_summary")
 
 
 graph = build_graph(preset=_read_preset())  # type: ignore[arg-type]

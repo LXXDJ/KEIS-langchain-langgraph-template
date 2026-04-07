@@ -20,21 +20,6 @@ class PresetInfo:
 
 
 PRESETS: dict[str, PresetInfo] = {
-    "chat": PresetInfo(
-        name="chat",
-        description="langchain create_agent() 기반 대화형 에이전트",
-        factory="langchain.agents.create_agent",
-    ),
-    "deep_research": PresetInfo(
-        name="deep_research",
-        description="deepagents create_deep_agent() 기반 리서치 에이전트 (planning, filesystem, subagents)",
-        factory="deepagents.create_deep_agent",
-    ),
-    "custom": PresetInfo(
-        name="custom",
-        description="수동 StateGraph 노드 조합 (LLM 없이 테스트/프로토타이핑용)",
-        factory="agents.graph_builder._build_custom",
-    ),
     "ai_search_summary": PresetInfo(
         name="ai_search_summary",
         description="고용24 검색 결과를 한국어 2~3줄로 요약하는 SVC-3 에이전트",

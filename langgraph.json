@@ -3,11 +3,11 @@
   "graphs": {
     "agent": "./src/graph.py:graph"
   },
-  "preset": "custom",
+  "preset": "ai_search_summary",
   "type": "service",
-  "name": "langchain-langgraph-template",
+  "name": "work24-search-summary-svc3",
   "version": "v260331",
-  "description": "langchain-langgraph 스켈레톤 서비스 입니다.",
+  "description": "고용24 통합검색 결과를 한국어 2~3줄로 요약하는 SVC-3 에이전트.",
   "maintainers": [
     {"name":  "NoName", "email": "example@atdev.co.kr"}
   ]
