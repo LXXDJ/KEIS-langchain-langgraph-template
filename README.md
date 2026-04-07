@@ -69,6 +69,37 @@ langchain-deep-agent-template/
 └─ .env.example                # 환경변수 템플릿
 ```
 
+## 수정 영역 vs 인프라 영역
+
+이 템플릿은 **사용자가 손대는 영역**과 **건드리지 않아도 되는 인프라 영역**이 명확히 분리되어 있습니다.
+모든 preset이 동일한 messages 기반 입출력을 사용하기 때문에, 에이전트 로직만 바꿔도 서빙 레이어는 그대로 동작합니다.
+
+### 사용자가 수정하는 영역
+
+| 시점 | 경로 | 무엇을 |
+|------|------|--------|
+| 시작 시 | `.env` | API 키 등 환경변수 (`.env.example` 복사 후 작성) |
+| 시작 시 | `langgraph.json` | preset 선택 (`custom` / `chat` / `deep_research`) |
+| 자주 | `src/agents/tools/examples.py` | mock 도구를 실제 API 호출로 교체 |
+| 자주 | `skills/` | `SKILL.md` 추가로 에이전트 능력 확장 |
+| 자주 | `src/agents/presets/{name}.py` | model, system_prompt, middleware 등 preset 파라미터 조정 |
+| 필요 시 | `src/agents/state.py` | State 필드 추가 (`InputState` / `InternalState` / `OutputState` 중 선택) |
+| 필요 시 | `src/agents/nodes/` | custom preset의 노드 추가·수정 (worker 교체 등) |
+| 필요 시 | `src/agents/tools/` | 새 도구(@tool) 파일 추가 |
+| 필요 시 | `src/agents/middlewares/` | 새 미들웨어 팩토리 추가 |
+| 필요 시 | `src/agents/backends/` | 새 백엔드 팩토리 추가 |
+| 새 preset 시 | `src/agents/graph_builder.py` | `_BUILDERS` dict 에 한 줄 추가 |
+
+### 건드리지 않아도 되는 인프라 영역
+
+| 경로 | 이유 |
+|------|------|
+| `app/` | FastAPI + LangServe 서빙 레이어 — `langgraph.json` 변경 시 자동 반영 |
+| `src/graph.py` | `langgraph.json` 의 그래프 진입점 — `build_graph()`를 자동 호출 |
+| `scripts/` | 로컬·Docker 실행 스크립트 |
+| `pyproject.toml`, `uv.lock` | 의존성 관리 — 추가는 `uv add <패키지>` 로 |
+| `tests/` | 템플릿 기본 동작 검증용 (필요 시 본인 테스트만 추가) |
+
 ## Preset
 
 `build_graph(preset=...)`로 에이전트 유형을 선택합니다. 모든 preset은 `CompiledStateGraph`를 반환하며, 동일한 messages 기반 입출력을 사용합니다.
