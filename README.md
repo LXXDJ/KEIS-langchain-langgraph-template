@@ -1,317 +1,231 @@
-# langchain-deep-agent-template
+# AI 검색 결과 요약 (SVC-3) — `ai_search_summary` preset
 
-LangChain, LangGraph, Deep Agents 생태계를 기반으로 **바로 개발에 사용할 수 있는 에이전트 개발 보일러플레이트 템플릿**입니다.
+고용24(work24.go.kr) 통합검색 결과를 한국어 2~3줄로 요약하는 에이전트 preset.
+이 문서는 `feat/ai-search-summary` 브랜치에서 진행 중인 작업의 설계와 현재 진행 상황을 기록한다.
 
-생태계의 내장 기능(미들웨어, 샌드박스, 서브에이전트 등)을 최대한 활용하고, 이런 기능들을 쉽게 찾아 쓸 수 있도록 하는 것이 핵심 목표입니다.
-
-## 전제 조건
-
-- **Python 3.12+**
-- **[uv](https://docs.astral.sh/uv/)** — 패키지 관리 및 실행 (`pip install uv` 또는 `brew install uv`)
-- **OPENAI_API_KEY** — chat, deep_research preset 사용 시 필요
-
-## 빠른 시작
-
-```bash
-# 1. 환경 설정
-cp .env.example .env
-# .env 파일에서 OPENAI_API_KEY 등 설정
-# langgraph.json의 "preset" 필드로 에이전트 유형 선택 (custom, chat, deep_research)
-
-# 2. 로컬 실행
-./scripts/run-local.sh
-
-# 3. Docker 실행
-./scripts/run-docker.sh
-```
-
-실행 후 `http://localhost:8000/agent/playground/` 에서 Playground UI를 확인할 수 있습니다.
-
-> **참고**: 기본 preset `custom`은 LLM 없이 동작하는 테스트용 에코 에이전트입니다.
-> 실제 LLM 에이전트를 사용하려면 `langgraph.json`에서 preset을 `chat` 또는 `deep_research`로 변경하세요.
-
-### API 호출 예시
-
-```bash
-curl -X POST http://localhost:8000/agent/invoke \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "messages": [
-        {"type": "human", "content": "안녕하세요"}
-      ]
-    }
-  }'
-```
-
-## 프로젝트 구조
-
-```text
-langchain-deep-agent-template/
-├─ src/
-│  ├─ graph.py                 # 컴파일된 그래프 모듈 (langgraph.json에서 참조)
-│  └─ agents/
-│     ├─ graph_builder.py      # build_graph(preset=...) 통합 진입점
-│     ├─ state.py              # State 정의 (Input/Internal/Output/Context)
-│     ├─ presets/              # 그래프 빌더 함수 (custom, chat, deep_research)
-│     ├─ nodes/                # 개별 노드 함수 (preprocess, worker, postprocessor)
-│     ├─ tools/                # 도구 (@tool) — OpenSearch 검색, 스킬 조회, 예시 도구
-│     ├─ skills/               # 스킬 경로 해석 유틸
-│     ├─ backends/             # 백엔드 팩토리 (파일시스템, 셸, 복합, 스토어)
-│     └─ middlewares/          # 미들웨어 팩토리 12종
-├─ app/                        # 서빙 레이어 (FastAPI + LangServe)
-├─ skills/                     # SKILL.md 파일 (에이전트가 탐색·조회)
-├─ docs/ko/                    # 한국어 문서
-├─ examples/                   # preset별 사용 예시
-├─ tests/                      # 단위 테스트
-├─ scripts/                    # 실행 스크립트
-├─ langgraph.json              # 서비스 설정 (preset, graphs, name, version)
-└─ .env.example                # 환경변수 템플릿
-```
-
-## Preset
-
-`build_graph(preset=...)`로 에이전트 유형을 선택합니다. 모든 preset은 `CompiledStateGraph`를 반환하며, 동일한 messages 기반 입출력을 사용합니다.
-
-| preset | 팩토리 | 설명 |
-|--------|--------|------|
-| `custom` (기본) | 수동 StateGraph | preprocess → worker → postprocessor 파이프라인. 노드를 직접 조합 |
-| `chat` | `langchain.agents.create_agent()` | 대화형 에이전트. 미들웨어, response_format 등 내장 기능 활용 |
-| `deep_research` | `deepagents.create_deep_agent()` | planning, filesystem, subagent, summarization 미들웨어 자동 구성 |
-
-```python
-from agents import build_graph
-from langchain_core.messages import HumanMessage
-
-# LLM 없이 테스트
-graph = build_graph()
-result = graph.invoke({"messages": [HumanMessage(content="hello")]})
-
-# LangChain 대화형 에이전트
-graph = build_graph("chat", model="openai:gpt-4o")
-
-# DeepAgents 리서치 에이전트
-graph = build_graph("deep_research", model="openai:gpt-4o")
-```
-
-## 도구 (Tools)
-
-`src/agents/tools/`에 에이전트가 사용하는 도구를 정의합니다.
-
-### OpenSearch 검색
-
-```python
-from agents.tools import search_opensearch, describe_opensearch_index
-```
-
-| 도구 | 설명 |
-|------|------|
-| `search_opensearch` | 의도 기반 파라미터(query, filters, date_range, sort)로 검색. 내부에서 DSL 조립 |
-| `describe_opensearch_index` | 인덱스 매핑 조회 — text/keyword/date/numeric 필드 분류 |
-
-연결 설정은 환경변수로 관리합니다 (`.env.example` 참조).
-
-### 스킬 도구
-
-```python
-from agents.tools import list_skills, read_skill
-```
-
-| 도구 | 설명 |
-|------|------|
-| `list_skills` | 사용 가능한 스킬 목록 조회 (이름, 설명만 — 토큰 절약) |
-| `read_skill` | 특정 스킬의 전체 SKILL.md 내용 반환 |
-
-스킬은 `skills/{skill-name}/SKILL.md` 형식으로 정의합니다. 에이전트가 `list_skills` → `read_skill` 순서로 필요한 스킬을 탐색합니다.
-
-### 예시 도구 (mock — 교체 필요)
-
-| 도구 | 설명 | 교체 대상 |
-|------|------|-----------|
-| `search_web` | 웹 검색 | Tavily, SerpAPI 등 |
-| `search_database` | DB 검색 | 실제 DB 연동 |
-| `read_document` | 문서 읽기 | S3, 파일시스템 등 |
-| `get_current_time` | 현재 시각 | 그대로 사용 가능 |
-
-> `src/agents/tools/examples.py`의 함수 본문을 실제 API 호출로 교체하세요.
-
-## 백엔드 (Backends)
-
-`deep_research` preset에서 사용하는 백엔드입니다. `src/agents/backends/`에 팩토리 함수로 정의됩니다.
-
-```python
-from agents.backends import create_filesystem_backend
-
-graph = build_graph("deep_research", backend=create_filesystem_backend())
-```
-
-| 팩토리 | 설명 |
-|--------|------|
-| `create_filesystem_backend()` | 로컬 파일시스템 (가장 단순) |
-| `create_local_shell_backend()` | 파일시스템 + 셸 명령 실행 (⚠️ 신뢰 환경에서만) |
-| `create_composite_backend()` | StateBackend + FilesystemBackend 조합 |
-| `create_store_backend()` | LangGraph BaseStore 기반 크로스스레드 영속 저장 |
-
-## 미들웨어 (Middlewares)
-
-`src/agents/middlewares/`에 12종의 범용 미들웨어 팩토리가 있습니다.
-
-```python
-from agents.middlewares import create_summarization_middleware, create_model_fallback_middleware
-
-agent = create_agent(
-    middleware=[
-        create_summarization_middleware(trigger=("tokens", 4000)),
-        create_model_fallback_middleware(models=["openai:gpt-4o", "openai:gpt-4o-mini"]),
-    ]
-)
-```
-
-| 분류 | 미들웨어 | 설명 |
-|------|----------|------|
-| 컨텍스트 | `create_summarization_middleware` | 토큰 초과 시 대화 요약 |
-| 컨텍스트 | `create_context_editing_middleware` | 오래된 도구 출력 정리 |
-| 실행 제어 | `create_hitl_middleware` | 도구 실행 전 사람 승인 |
-| 실행 제어 | `create_model_call_limit_middleware` | 모델 호출 횟수 제한 |
-| 실행 제어 | `create_tool_call_limit_middleware` | 도구 호출 횟수 제한 |
-| 안정성 | `create_model_fallback_middleware` | 모델 실패 시 대체 모델 전환 |
-| 안정성 | `create_model_retry_middleware` | 모델 API 재시도 |
-| 안정성 | `create_tool_retry_middleware` | 도구 호출 재시도 |
-| 보안 | `create_pii_detection_middleware` | 개인정보 탐지·마스킹 |
-| 능력 | `create_todo_list_middleware` | 작업 계획·추적 |
-| 능력 | `create_tool_selector_middleware` | LLM 기반 도구 필터링 |
-| 테스트 | `create_tool_emulator_middleware` | LLM으로 도구 응답 에뮬레이션 |
-
-자세한 내용은 [docs/ko/middleware-guide.md](docs/ko/middleware-guide.md)를 참고하세요.
-
-## Custom Preset — Worker 교체
-
-custom preset은 기본적으로 LLM 없이 테스트용 worker를 사용합니다.
-다른 worker를 사용하려면 `src/agents/presets/custom.py`의 import를 교체하세요:
-
-| worker 모듈 | 파일 | 설명 |
-|-------------|------|------|
-| `worker` (기본) | `worker.py` | LLM 없이 테스트용. 입력을 그대로 반환 |
-| `worker_chat` | `worker_chat.py` | `create_agent()` + `@tool`로 대화형 서브에이전트 |
-| `worker_deep` | `worker_deep.py` | `create_deep_agent()` + `@tool`로 리서치 서브에이전트 |
-
-```python
-# src/agents/presets/custom.py에서 import 교체
-from agents.nodes import worker_chat as worker  # create_agent() 기반
-# 또는
-from agents.nodes import worker_deep as worker  # create_deep_agent() 기반
-```
-
-## State 분리 패턴
-
-custom preset은 실제 서비스에서 사용하는 State 분리 패턴을 적용합니다:
-
-| State | 역할 | 필드 |
-|-------|------|------|
-| `InputState` | 외부 입력 | `messages` |
-| `InternalState` | 내부 처리 (외부 비노출) | `_worker_outputs` |
-| `OutputState` | 최종 출력 | `messages` |
-| `State` | Input + Internal + Output 합집합 | 전체 |
-| `Context` | 런타임 설정 (state에 포함되지 않음) | `debug` |
-
-## 실서비스 커스터마이징 가이드
-
-이 템플릿을 실제 서비스로 만들려면:
-
-### 1. preset 선택
-
-`langgraph.json`에서 용도에 맞는 preset을 선택합니다:
-- 단순 대화형 → `chat`
-- 복잡한 조사/분석 → `deep_research`
-- 노드 단위 제어 필요 → `custom`
-
-### 2. mock 도구 교체
-
-`src/agents/tools/examples.py`의 mock 도구를 실제 API로 교체합니다:
-- `search_web` → Tavily, SerpAPI 등
-- `search_database` → 실제 DB 클라이언트
-- `read_document` → S3, 로컬 파일시스템 등
-
-### 3. OpenSearch 연결
-
-`.env`에서 `OPENSEARCH_*` 환경변수를 설정하면 `search_opensearch`, `describe_opensearch_index` 도구가 바로 동작합니다.
-
-### 4. 스킬 추가
-
-`skills/{skill-name}/SKILL.md`를 작성하면 에이전트가 자동으로 탐색합니다:
-
-```markdown
----
-name: my-skill
-description: 이 스킬이 하는 일을 설명합니다.
 ---
 
-# 스킬 상세 내용
+## 목표
 
-에이전트가 이 스킬을 읽고 따라야 할 지침을 작성합니다.
+고용24 검색 결과 페이지 상단에 2~3줄 AI 요약 카드를 표시한다. 사용자가 검색어를 입력하면:
+
+1. 의도에 맞는 카테고리 우선순위를 산출
+2. work24 통합검색을 호출해 결과 수집
+3. 핵심 결과를 선별하여 한국어 요약 생성
+4. 원문 이동 URL + 추가 탐색 경로(2·3순위 카테고리 대표 결과 + 연관검색어) 제공
+
+요약 대상은 **공개 검색 결과만**(개인정보 미포함)이므로 외부 LLM(GPT-4o mini) 사용이 허용된다.
+SVC-1(일자리검색, 개인정보 포함)은 별도 에이전트로 분리되며, 본 작업은 SVC-3(요약)만 다룬다.
+SVC-1과의 멀티에이전트 합성을 위해 본 preset은 그 자체로 임베드 가능한 서브그래프로 설계되었다.
+
+---
+
+## 아키텍처
+
+### 파이프라인
+
+```
+START → preprocess → worker_search_summary → postprocessor → END
 ```
 
-### 5. 미들웨어 적용
+기존 템플릿의 `custom` preset과 동일한 3단 구조를 따른다. `preprocess`와 `postprocessor`는
+기존 노드를 그대로 재사용하고, 핵심 로직은 신규 worker 노드 한 곳에 모았다.
 
-운영 환경에 맞는 미들웨어를 조합합니다. 권장 구성:
+### `worker_search_summary` 내부 흐름
 
-```python
-# 최소 구성
-middleware = [create_summarization_middleware()]
+단일 노드 안에서 결정론적으로 순차 실행:
 
-# 운영 구성
-middleware = [
-    create_summarization_middleware(trigger=("tokens", 4000)),
-    create_model_fallback_middleware(models=["openai:gpt-4o", "openai:gpt-4o-mini"]),
-    create_model_retry_middleware(max_retries=3),
-    create_tool_call_limit_middleware(max_calls=30),
-]
-```
+1. `messages`의 마지막 `HumanMessage`에서 query 추출
+2. `_classify_intent(query)` — LLM(gpt-4o-mini, structured output)로 카테고리 우선순위 산출
+3. `fetch_work24_search(query)` — work24 통합검색 호출, 정규화된 결과 + 연관검색어 반환
+4. `_select_top_k_by_category(results, ranking, k=5)` — 결정론적 top-k 선별 (LLM 미사용)
+5. `_summarize(query, selected)` — LLM(gpt-4o-mini)로 한국어 2~3줄 요약 생성
+6. `_build_navigation(results, ranking, related_queries)` — primary_url, related_categories, related_queries 구성
+7. 최종 payload를 JSON 직렬화하여 `_worker_outputs[0]["data"]["response"]`에 push
 
-## 서빙
+기존 `postprocessor`가 `_worker_outputs[0]["data"]["response"]`를 그대로 `AIMessage.content`에
+넣기 때문에, worker가 그 자리에 JSON 문자열을 넣어주면 별도 postprocessor 없이도 동작한다.
 
-LangServe 기반으로 서빙합니다. `langgraph.json`의 `graphs` 키에서 URI 경로가 결정됩니다.
+### 출력 JSON 구조
 
 ```json
 {
-  "graphs": { "agent": "./src/graph.py:graph" },
-  "preset": "custom"
+  "summary": "한국어 2~3줄 요약 텍스트",
+  "primary_url": "1순위 카테고리의 top1 결과 URL",
+  "related_categories": [
+    {"category": "정책", "url": "...", "title": "..."},
+    {"category": "훈련", "url": "...", "title": "..."}
+  ],
+  "related_queries": ["연관검색어1", "연관검색어2", "..."]
 }
 ```
 
-위 설정의 경우 아래 엔드포인트가 생성됩니다:
+`AIMessage.content`에 위 JSON 문자열이 그대로 담긴다.
 
-- `/agent/invoke` — 동기식 실행
-- `/agent/stream` — 스트리밍
-- `/agent/playground/` — Playground UI
-- `/health` — 서비스 상태 확인
-- `/presets` — 사용 가능한 preset 목록
-- `/docs` — Swagger UI
+---
 
-## 환경변수
+## 핵심 설계 원칙
 
-| 변수 | 기본값 | 설명 |
-|------|--------|------|
-| **LLM** | | |
-| `OPENAI_API_KEY` | — | chat, deep_research preset에서 필요 |
-| **OpenSearch** | | |
-| `OPENSEARCH_HOST` | `localhost` | OpenSearch 호스트 |
-| `OPENSEARCH_PORT` | `9200` | OpenSearch 포트 |
-| `OPENSEARCH_INDEX` | — | 기본 검색 인덱스 |
-| `OPENSEARCH_USER` | — | 인증 사용자 (선택) |
-| `OPENSEARCH_PASSWORD` | — | 인증 비밀번호 (선택) |
-| `OPENSEARCH_USE_SSL` | `false` | TLS 사용 여부 |
-| `OPENSEARCH_VERIFY_CERTS` | `true` | 인증서 검증 (사설 CA 시 false) |
-| `OPENSEARCH_CA_CERTS` | — | CA 인증서 경로 |
-| `OPENSEARCH_SORT_FIELD` | `created_at` | 날짜 정렬 기준 필드 |
-| **서버** | | |
-| `HOST` | `0.0.0.0` | 서버 바인딩 호스트 |
-| `PORT` | `8000` | 서버 포트 |
-| **기타** | | |
-| `AGENT_OUTPUT_DIR` | `./outputs` | 에이전트 파일 출력 디렉토리 |
+1. **선형 결정론 파이프라인 + 두 번의 LLM 호출.** 멀티에이전트 워크플로가 아니므로
+   `worker_chat.py`처럼 단일 노드에 전부 담는다. 각 단계를 별도 노드로 쪼개지 않는다.
+2. **`state.py`를 건드리지 않는다.** 모든 중간 결과는 기존 `_worker_outputs` 필드에 dict로 담는다.
+3. **검색 fetcher는 plain async 함수.** worker 파일 안에 모듈 레벨 헬퍼로 둔다
+   (CLAUDE.md의 "worker 전용 도구는 worker 파일 안에" 규칙). `@tool` 래핑은 멀티에이전트
+   합성이 필요해질 때 추가.
+4. **단계별 구현(stub → parser → HTTP).** HTML 셀렉터를 모르는 상태에서 전체가 막히지 않도록
+   1단계는 stub fetcher로 파이프라인 전체를 끝내고 머지 가능 상태로 만든다.
+5. **graceful degradation.** LLM 호출과 HTTP 호출 모두 실패 시 fallback을 제공해
+   사용자에게 항상 응답을 반환한다.
 
-## 문서
+### Fallback 전략
 
-- [docs/ko/architecture.md](docs/ko/architecture.md) — 레이어 아키텍처
-- [docs/ko/deepagents-overview.md](docs/ko/deepagents-overview.md) — Deep Agents 개요
-- [docs/ko/middleware-guide.md](docs/ko/middleware-guide.md) — 미들웨어 가이드
+| 실패 지점 | 동작 |
+|---|---|
+| 의도 분류 LLM 실패 | 중립 기본 ranking (`["전체", "신고·신청", "정책", ...]`) 사용 |
+| 요약 LLM 실패 | top-1 결과의 title을 echo |
+| work24 fetch 실패 | 빈 결과 + 경고 로그, 파이프라인 계속 진행 |
+| HTML 파싱 실패 | 동일 (빈 결과 + 경고 로그) |
+| 빈 query | LLM/fetch 호출 생략, 빈 payload 즉시 반환 |
+
+---
+
+## 단계별 구현 로드맵
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| **Phase 1** | 스켈레톤 + stub fetcher (하드코딩 fake 결과). 모든 노드/preset/등록/테스트 완성. 머지 가능 상태. | ✅ 완료 |
+| **Phase 2** | 실제 work24 페이지 HTML을 fixture로 캡처하고 BeautifulSoup 파서(`_parse_work24_html`) 구현. 카테고리별 셀렉터 정의. 파서 단위 테스트 추가. | ⏳ 예정 |
+| **Phase 3** | `httpx.AsyncClient`로 실제 HTTP 호출 결선. User-Agent 헤더, timeout=5.0, 예외 처리. 통합 테스트(`@pytest.mark.integration`). | ⏳ 예정 |
+
+### Phase 1 — 완료된 작업
+
+**신규 파일 (3):**
+- `src/agents/nodes/worker_search_summary.py` — worker 노드 + 모든 private 헬퍼
+  - `_classify_intent`, `_summarize` (LLM 호출, 테스트에서 monkeypatch)
+  - `_select_top_k_by_category`, `_build_navigation` (결정론, 순수 함수)
+  - `fetch_work24_search` (Phase 1: stub, Phase 3: 실제 HTTP)
+  - `_parse_work24_html` (Phase 1: 빈 stub, Phase 2: BeautifulSoup 구현)
+  - `_IntentResult` Pydantic 모델, `_INTENT_SYSTEM_PROMPT` / `_SUMMARY_SYSTEM_PROMPT` 상수
+  - `_DEFAULT_CATEGORY_RANKING` (LLM 실패 시 fallback)
+- `src/agents/presets/ai_search_summary.py` — `build_ai_search_summary()` 빌더 (custom.py 구조 그대로)
+- `tests/test_ai_search_summary.py` — 단위/통합 테스트 11개
+
+**수정 파일 (5):**
+- `pyproject.toml` — `beautifulsoup4>=4.12` 추가 (Phase 2 대비)
+- `src/agents/nodes/__init__.py` — `worker_search_summary` export
+- `src/agents/presets/__init__.py` — `build_ai_search_summary` export
+- `src/agents/registry.py` — `PresetInfo` 등록
+- `src/agents/graph_builder.py` — `Preset` Literal과 `_BUILDERS`에 추가
+
+**의도적으로 건드리지 않은 파일:**
+- `src/agents/state.py` — 새 필드 추가 없음 (`_worker_outputs` 재사용)
+- `langgraph.json` — default preset 변경하지 않음 (사용자가 필요시 수동으로)
+
+---
+
+## 사용 방법
+
+### Python에서 직접 사용
+
+```python
+import asyncio, json
+from langchain_core.messages import HumanMessage
+from agents import build_graph
+
+graph = build_graph("ai_search_summary")
+result = asyncio.run(
+    graph.ainvoke({"messages": [HumanMessage("서울 카페 아르바이트")]})
+)
+payload = json.loads(result["messages"][-1].content)
+print(payload["summary"])
+print(payload["primary_url"])
+print(payload["related_categories"])
+print(payload["related_queries"])
+```
+
+### LangServe로 서빙
+
+`langgraph.json`의 `preset` 필드를 변경:
+
+```json
+{
+  "preset": "ai_search_summary",
+  ...
+}
+```
+
+이후 `./scripts/run-local.sh`로 띄우면 LangServe가 새 preset의 그래프를 expose한다.
+
+> ⚠️ Phase 1 단계에서는 `fetch_work24_search`가 stub 데이터를 반환하므로,
+> 실제 work24 결과가 아니라 하드코딩된 샘플이 요약된다. Phase 3 완료 후 실데이터로 동작.
+
+---
+
+## 테스트 전략
+
+I/O 경계에서만 mock하고 순수 함수는 직접 단위 테스트.
+
+### 테스트 목록 (`tests/test_ai_search_summary.py`)
+
+| 테스트 | 대상 | 방식 |
+|---|---|---|
+| `test_select_top_k_orders_by_ranking` | `_select_top_k_by_category` | 순수 함수 단위 |
+| `test_select_top_k_truncates_to_k` | 동일 | 순수 함수 단위 |
+| `test_select_top_k_unknown_category_goes_last` | 동일 | 순수 함수 단위 |
+| `test_build_navigation_picks_primary_and_related` | `_build_navigation` | 순수 함수 단위 |
+| `test_build_navigation_handles_missing_categories` | 동일 | 순수 함수 단위 |
+| `test_build_navigation_caps_related_queries_at_5` | 동일 | 순수 함수 단위 |
+| `test_classify_intent_fallback_on_failure` | `_classify_intent` | LLM monkeypatch → 예외 → fallback 검증 |
+| `test_summarize_fallback_on_failure` | `_summarize` | LLM monkeypatch → 예외 → top1 title echo |
+| `test_summarize_fallback_on_empty_selection` | 동일 | 빈 selection 시 빈 문자열 |
+| `test_preset_e2e_returns_json_ai_message` | preset 전체 | fetch/classify/summarize 모두 monkeypatch, AIMessage 검증 |
+| `test_preset_e2e_handles_empty_query` | preset 전체 | 빈 query 시 빈 payload 즉시 반환 |
+
+### 실행
+
+```bash
+uv run pytest tests/test_ai_search_summary.py -v
+```
+
+### 주의: 모듈 재노출 vs monkeypatch
+
+`agents.nodes.__init__.py`가 `worker_search_summary`라는 이름으로 함수를 재노출하기
+때문에, `from agents.nodes import worker_search_summary as wss`나
+`import agents.nodes.worker_search_summary as wss`는 모두 **모듈이 아닌 함수**에 바인딩된다.
+모듈 객체에 monkeypatch하려면 `importlib.import_module(...)`로 우회해야 한다:
+
+```python
+import importlib
+wss = importlib.import_module("agents.nodes.worker_search_summary")
+```
+
+---
+
+## 의도적으로 하지 않은 것 (이번 범위 밖)
+
+- `state.py` 수정 — 오버엔지니어링 회피
+- 전용 postprocessor 추가 — 기존 것 재사용 가능
+- `prompts/` 패키지 신설 — 상수 두 개를 위해 폴더 생성하지 않음
+- 새 미들웨어/백엔드
+- `langgraph.json`의 default preset 변경 — 사용자 선택 영역
+- SVC-1(일자리검색) 통합 — subgraph 합성 가능하도록 설계만 유지
+- 키워드 검색 → 하이브리드 검색 전환 — 검색 인프라 단의 별개 작업
+- HITL, 재시도 미들웨어 등 운영 정책 — MVP 이후
+
+---
+
+## 알려진 이슈
+
+- **`tests/test_graph_loader.py` 2건 실패 (pre-existing)**: `src/graph.py:27`이 `langgraph.json`을
+  `read_text()`로 읽을 때 encoding을 명시하지 않아, Windows 한국어 로케일(cp949)에서
+  한국어 description을 디코딩하지 못함. 본 작업과 무관한 별개 이슈.
+
+---
+
+## 참고 파일
+
+- 설계 노트: `C:\Users\jack1\.claude\plans\synthetic-noodling-moon.md`
+- 루트 컨벤션: [CLAUDE.md](../../CLAUDE.md)
+- 에이전트 컨벤션: [src/agents/CLAUDE.md](../../src/agents/CLAUDE.md)
+- 참고 preset: [src/agents/presets/custom.py](../../src/agents/presets/custom.py)
+- 참고 worker: [src/agents/nodes/worker_chat.py](../../src/agents/nodes/worker_chat.py)
