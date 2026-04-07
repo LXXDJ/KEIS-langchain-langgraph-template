@@ -6,13 +6,13 @@
         → 카테고리별 top-k 선별 → 요약(LLM) → navigation 구성
         → JSON 직렬화 → _worker_outputs push
 
-기존 ``preprocess`` / ``postprocessor`` 노드와 함께 사용됩니다.
-``postprocessor``가 ``_worker_outputs[0]["data"]["response"]`` 를 그대로
-``AIMessage.content`` 에 넣으므로 본 worker는 그 자리에 JSON 문자열을 넣습니다.
+``preprocess`` / ``postprocessor`` 노드와 함께 사용됩니다. ``postprocessor`` 가
+``_worker_outputs[0]["data"]["response"]`` 를 그대로 ``AIMessage.content`` 에
+넣으므로 본 worker 는 그 자리에 JSON 문자열을 넣습니다.
 
-NOTE: ``fetch_work24_search`` 는 Phase 1 단계에서 하드코딩된 stub 데이터를 반환합니다.
-Phase 2(파서) / Phase 3(실제 HTTP) 에서 점진적으로 교체됩니다.
-공식 API가 제공되면 HTML 스크래핑을 그쪽으로 교체하는 것을 권장합니다.
+NOTE: ``fetch_work24_search`` 는 공식 API 가 아니라 work24 통합검색 페이지의
+HTML 스크래핑으로 결과를 가져옵니다. 공식 API 가 제공되면 그쪽으로 교체하는 것을
+권장합니다. 자세한 동작과 디자인 결정은 README.md 의 "각 노드 상세" 섹션 참고.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ class _IntentResult(BaseModel):
     )
 
 
-# ── HTML 파서 (Phase 2에서 구현) ─────────────────────────────────
+# ── HTML 파서 ────────────────────────────────────────────────
 
 
 def _is_meaningful_href(href: str | None) -> bool:
@@ -298,7 +298,7 @@ def _parse_work24_html(
     return results, related_queries, related_jobs
 
 
-# ── Fetcher (Phase 1: stub, Phase 3: 실제 HTTP) ──────────────────
+# ── Fetcher (work24 통합검색 HTTP 호출) ──────────────────────────
 
 
 async def fetch_work24_search(
