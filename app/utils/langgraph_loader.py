@@ -43,7 +43,7 @@ def load_langgraph_config(
     if not config_path.exists():
         return None
 
-    raw = json.loads(config_path.read_text())
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
 
     # ── graphs ────────────────────────────────────────────────
     graphs: list[GraphConfig] = []

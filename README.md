@@ -40,7 +40,7 @@ START → preprocess → worker_search_summary → postprocessor → END
 3. `fetch_work24_search(query)` — work24 통합검색 호출, 정규화된 결과 + 연관검색어 반환
 4. `_select_top_k_by_category(results, ranking, k=5)` — 결정론적 top-k 선별 (LLM 미사용)
 5. `_summarize(query, selected)` — LLM(gpt-4o-mini)로 한국어 2~3줄 요약 생성
-6. `_build_navigation(results, ranking, related_queries)` — primary_url, related_categories, related_queries 구성
+6. `_build_navigation(results, ranking, related_queries, related_jobs)` — primary_url, related_categories, related_queries, related_jobs 구성
 7. 최종 payload를 JSON 직렬화하여 `_worker_outputs[0]["data"]["response"]`에 push
 
 기존 `postprocessor`가 `_worker_outputs[0]["data"]["response"]`를 그대로 `AIMessage.content`에
@@ -56,9 +56,18 @@ START → preprocess → worker_search_summary → postprocessor → END
     {"category": "정책", "url": "...", "title": "..."},
     {"category": "훈련", "url": "...", "title": "..."}
   ],
-  "related_queries": ["연관검색어1", "연관검색어2", "..."]
+  "related_queries": ["연관검색어1", "연관검색어2", "..."],
+  "related_jobs": ["대분류 > 중분류 > 직종명1", "대분류 > 중분류 > 직종명2"]
 }
 ```
+
+| 필드 | 출처 | 최대 개수 |
+|---|---|---|
+| `summary` | LLM 생성 (GPT-4o mini) | 2~3줄 |
+| `primary_url` | 1순위 카테고리의 top1 결과 URL | 1 |
+| `related_categories` | 2·3순위 카테고리에서 각 1개씩 | 2 |
+| `related_queries` | work24 페이지의 `form_keyword1` 영역 | 5 |
+| `related_jobs` | work24 페이지의 `form_keyword2` 영역 | 2 |
 
 `AIMessage.content`에 위 JSON 문자열이 그대로 담긴다.
 

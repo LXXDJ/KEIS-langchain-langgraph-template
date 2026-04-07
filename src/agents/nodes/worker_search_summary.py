@@ -231,23 +231,43 @@ def _parse_related_queries(soup: BeautifulSoup) -> list[str]:
     return out[:5]
 
 
-def _parse_work24_html(html: str) -> tuple[list[dict[str, Any]], list[str]]:
-    """고용24 통합검색 결과 HTML을 정규화된 결과 리스트 + 연관검색어로 파싱합니다.
+def _parse_related_jobs(soup: BeautifulSoup) -> list[str]:
+    """``form_keyword2`` 탭의 ``_btn_jobsCategor`` 버튼에서 연관직종을 추출합니다.
+
+    work24의 연관직종은 보통 "대분류 > 중분류 > 소분류" 형식으로 노출되며,
+    현재 시스템 명세상 최대 2개까지 표시한다.
+    """
+    container = soup.find("div", id="form_keyword2")
+    if not container or not isinstance(container, Tag):
+        return []
+    out: list[str] = []
+    for btn in container.find_all("button", attrs={"name": "_btn_jobsCategor"}):
+        text = " ".join(btn.get_text(" ", strip=True).split())
+        if text and text not in out:
+            out.append(text)
+    return out[:2]
+
+
+def _parse_work24_html(
+    html: str,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """고용24 통합검색 결과 HTML을 정규화된 결과 + 연관검색어 + 연관직종으로 파싱합니다.
 
     Returns:
-        (results, related_queries)
+        (results, related_queries, related_jobs)
         results: ``{"title", "snippet", "url", "category", "meta"}`` dict의 리스트
         related_queries: 연관검색어 문자열 리스트 (최대 5개)
+        related_jobs: 연관직종 문자열 리스트 (최대 2개)
 
-    파싱 실패 시 빈 튜플 ``([], [])`` 을 반환합니다 (caller가 graceful degradation).
+    파싱 실패 시 빈 튜플 ``([], [], [])`` 을 반환합니다 (caller가 graceful degradation).
     """
     if not html:
-        return [], []
+        return [], [], []
     try:
         soup = BeautifulSoup(html, "html.parser")
     except Exception:
         _log.exception("BeautifulSoup parsing failed")
-        return [], []
+        return [], [], []
 
     results: list[dict[str, Any]] = []
     for stit in soup.select("div.stit_area"):
@@ -273,8 +293,9 @@ def _parse_work24_html(html: str) -> tuple[list[dict[str, Any]], list[str]]:
             if parsed is not None:
                 results.append(parsed)
 
-    related = _parse_related_queries(soup)
-    return results, related
+    related_queries = _parse_related_queries(soup)
+    related_jobs = _parse_related_jobs(soup)
+    return results, related_queries, related_jobs
 
 
 # ── Fetcher (Phase 1: stub, Phase 3: 실제 HTTP) ──────────────────
@@ -283,24 +304,46 @@ def _parse_work24_html(html: str) -> tuple[list[dict[str, Any]], list[str]]:
 async def fetch_work24_search(
     query: str,
     *,
-    list_count: int = 5,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """고용24 통합검색을 호출해 정규화된 결과 + 연관검색어를 반환합니다.
+    list_count: int = 20,
+) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    """고용24 통합검색을 호출해 정규화된 결과 + 연관검색어 + 연관직종을 반환합니다.
 
     실패 시 빈 리스트 + 경고 로그 (요약 파이프라인이 멈추지 않게).
+
+    work24의 통합검색 페이지는 카테고리별로 별도의 정렬 옵션 파라미터를 받는다.
+    브라우저에서 실제로 보내는 파라미터셋을 그대로 흉내내어 사용자가 보는 화면과
+    동일한 결과를 받도록 한다.
 
     NOTE: 공식 API가 아니라 공개 페이지의 HTML 스크래핑입니다.
     work24가 API를 제공하면 그쪽으로 교체하는 것을 권장합니다.
     """
     if not query:
-        return [], []
+        return [], [], []
 
+    # work24 통합검색 페이지가 실제로 보내는 파라미터셋과 동일하게 구성.
+    # 카테고리별 정렬 옵션을 명시해야 사용자가 브라우저에서 보는 결과와
+    # 일치한다 (특히 훈련은 DATE, 보고서는 TITLE, 나머지는 RANK).
     params = {
         "topQuerySearchArea": "all",
         "topQueryData": query,
+        "startDate": "",
+        "endDate": "",
         "sortField": "rank",
+        "includedQuery": "",
+        "excludedQuery": "",
         "startCount": "1",
         "listCount": str(list_count),
+        "reportSort": "TITLE",
+        "workinfoSort": "RANK",
+        "residentSort": "RANK",
+        "policySort": "RANK",
+        "newsSort": "RANK",
+        "bizinfoSort": "RANK",
+        "trainingSort": "DATE",
+        "jobCourseSort": "RANK",
+        "qualSort": "RANK",
+        "etcSort": "RANK",
+        "rdo": "",
     }
     headers = {"User-Agent": _WORK24_USER_AGENT}
 
@@ -316,10 +359,10 @@ async def fetch_work24_search(
             html = response.text
     except httpx.HTTPError:
         _log.exception("work24 fetch failed for query=%r", query)
-        return [], []
+        return [], [], []
     except Exception:
         _log.exception("unexpected error while fetching work24 query=%r", query)
-        return [], []
+        return [], [], []
 
     return _parse_work24_html(html)
 
@@ -351,12 +394,14 @@ def _build_navigation(
     results: list[dict[str, Any]],
     ranking: list[str],
     related_queries: list[str],
+    related_jobs: list[str],
 ) -> dict[str, Any]:
     """navigation dict 구성.
 
     - primary_url: 1순위 카테고리에서 첫 번째 결과의 URL
     - related_categories: 2·3순위 카테고리에서 각 1개씩
     - related_queries: 연관검색어 (최대 5개)
+    - related_jobs: 연관직종 (최대 2개)
     """
     by_category: dict[str, list[dict[str, Any]]] = {}
     for r in results:
@@ -388,6 +433,7 @@ def _build_navigation(
         "primary_url": primary_url,
         "related_categories": related_categories,
         "related_queries": related_queries[:5],
+        "related_jobs": related_jobs[:2],
     }
 
 
@@ -468,6 +514,7 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
             "primary_url": "",
             "related_categories": [],
             "related_queries": [],
+            "related_jobs": [],
         }
         return {
             "_worker_outputs": [
@@ -479,16 +526,17 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
         }
 
     ranking = await _classify_intent(query)
-    results, related_queries = await fetch_work24_search(query)
+    results, related_queries, related_jobs = await fetch_work24_search(query)
     selected = _select_top_k_by_category(results, ranking, k=5)
     summary = await _summarize(query, selected)
-    navigation = _build_navigation(results, ranking, related_queries)
+    navigation = _build_navigation(results, ranking, related_queries, related_jobs)
 
     payload = {
         "summary": summary,
         "primary_url": navigation["primary_url"],
         "related_categories": navigation["related_categories"],
         "related_queries": navigation["related_queries"],
+        "related_jobs": navigation["related_jobs"],
     }
 
     return {
