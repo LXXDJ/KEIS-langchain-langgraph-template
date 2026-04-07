@@ -14,16 +14,18 @@ from typing import Any, Literal
 
 from langgraph.graph.state import CompiledStateGraph
 
+from agents.presets.ai_search_summary import build_ai_search_summary
 from agents.presets.chat import build_chat
 from agents.presets.custom import build_custom
 from agents.presets.deep_research import build_deep_research
 
-Preset = Literal["chat", "deep_research", "custom"]
+Preset = Literal["chat", "deep_research", "custom", "ai_search_summary"]
 
 _BUILDERS: dict[str, Any] = {
     "chat": build_chat,
     "deep_research": build_deep_research,
     "custom": build_custom,
+    "ai_search_summary": build_ai_search_summary,
 }
 
 

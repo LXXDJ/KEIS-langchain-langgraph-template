@@ -35,6 +35,11 @@ PRESETS: dict[str, PresetInfo] = {
         description="수동 StateGraph 노드 조합 (LLM 없이 테스트/프로토타이핑용)",
         factory="agents.graph_builder._build_custom",
     ),
+    "ai_search_summary": PresetInfo(
+        name="ai_search_summary",
+        description="고용24 검색 결과를 한국어 2~3줄로 요약하는 SVC-3 에이전트",
+        factory="agents.presets.ai_search_summary.build_ai_search_summary",
+    ),
 }
 
 
