@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -21,6 +22,78 @@ from agents.presets.ai_search_summary import build_ai_search_summary
 # 이름을 함수로 재노출하므로 ``import agents.nodes.worker_search_summary as wss`` 가
 # 모듈이 아닌 함수에 바인딩된다. 모듈 객체를 얻으려면 importlib 를 사용한다.
 wss = importlib.import_module("agents.nodes.worker_search_summary")
+
+_FIXTURE_DIR = Path(__file__).parent / "fixtures"
+_WORK24_FIXTURE = _FIXTURE_DIR / "work24_sample.html"
+
+
+# ── 단위 테스트: _parse_work24_html ──────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def work24_html() -> str:
+    """실제 work24.go.kr 검색 결과 HTML (Phase 2 fixture)."""
+    if not _WORK24_FIXTURE.exists():
+        pytest.skip(f"fixture missing: {_WORK24_FIXTURE}")
+    return _WORK24_FIXTURE.read_text(encoding="utf-8")
+
+
+def test_parse_work24_html_returns_results_and_related(work24_html: str) -> None:
+    results, related = wss._parse_work24_html(work24_html)
+    assert results, "fixture에서 결과가 하나도 파싱되지 않음"
+    assert related, "fixture에서 연관검색어가 파싱되지 않음"
+    assert len(related) <= 5
+
+
+def test_parse_work24_html_results_have_required_fields(work24_html: str) -> None:
+    results, _ = wss._parse_work24_html(work24_html)
+    for r in results:
+        assert set(r.keys()) >= {"title", "snippet", "url", "category", "meta"}
+        assert isinstance(r["title"], str)
+        assert isinstance(r["snippet"], str)
+        assert isinstance(r["url"], str)
+        assert isinstance(r["category"], str)
+        assert isinstance(r["meta"], dict)
+        # title이나 url 중 하나는 반드시 있어야 한다 (placeholder 제외).
+        assert r["title"] or r["url"]
+
+
+def test_parse_work24_html_covers_multiple_categories(work24_html: str) -> None:
+    results, _ = wss._parse_work24_html(work24_html)
+    categories = {r["category"] for r in results}
+    # 검색어 'ai'에 대해 적어도 채용/훈련/뉴스·자료는 항상 보여야 한다.
+    expected_subset = {"채용", "훈련", "뉴스·자료"}
+    assert expected_subset.issubset(categories), f"missing: {expected_subset - categories}"
+
+
+def test_parse_work24_html_absolutizes_relative_urls(work24_html: str) -> None:
+    results, _ = wss._parse_work24_html(work24_html)
+    urls_with_value = [r["url"] for r in results if r["url"]]
+    assert urls_with_value, "URL을 가진 결과가 하나도 없음"
+    for url in urls_with_value:
+        assert url.startswith("http://") or url.startswith("https://"), url
+
+
+def test_parse_work24_html_empty_input_returns_empty() -> None:
+    results, related = wss._parse_work24_html("")
+    assert results == []
+    assert related == []
+
+
+def test_parse_work24_html_garbage_input_returns_empty() -> None:
+    """파싱 가능한 마크업이지만 work24 구조가 아니면 빈 결과."""
+    results, related = wss._parse_work24_html("<html><body><p>not work24</p></body></html>")
+    assert results == []
+    assert related == []
+
+
+def test_parse_work24_html_truncated_input_does_not_raise() -> None:
+    """잘린 HTML이어도 예외를 던지지 않아야 한다."""
+    truncated = "<html><body><div class='stit_area'><span class='t2_sb'>채용</span"
+    # 절대 raise하면 안 됨.
+    results, related = wss._parse_work24_html(truncated)
+    assert isinstance(results, list)
+    assert isinstance(related, list)
 
 
 # ── 단위 테스트: _select_top_k_by_category ───────────────────────

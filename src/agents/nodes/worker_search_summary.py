@@ -21,6 +21,9 @@ import json
 import logging
 from typing import Any
 
+import httpx
+from bs4 import BeautifulSoup
+from bs4.element import Tag
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
@@ -28,6 +31,17 @@ from pydantic import BaseModel, Field
 from agents.state import State
 
 _log = logging.getLogger(__name__)
+
+# 상대 URL을 절대 URL로 만들 때 사용.
+_WORK24_BASE = "https://www.work24.go.kr"
+_WORK24_SEARCH_PATH = "/cm/f/c/0100/selectUnifySearch.do"
+_WORK24_HTTP_TIMEOUT = 5.0
+# 기본 httpx UA가 차단될 가능성을 피하기 위해 명시.
+_WORK24_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
 
 
 # ── 상수 / 프롬프트 ──────────────────────────────────────────────
@@ -81,17 +95,175 @@ class _IntentResult(BaseModel):
 # ── HTML 파서 (Phase 2에서 구현) ─────────────────────────────────
 
 
+def _is_meaningful_href(href: str | None) -> bool:
+    """``javascript:`` / ``#`` / 빈 값 등을 걸러냅니다."""
+    if not href:
+        return False
+    h = href.strip().lower()
+    return not (
+        h.startswith("javascript:")
+        or h.startswith("#")
+        or h == "void(0)"
+        or h == ""
+    )
+
+
+def _absolutize(href: str) -> str:
+    """상대 URL이면 work24 base를 prepend합니다."""
+    if href.startswith(("http://", "https://")):
+        return href
+    if href.startswith("/"):
+        return _WORK24_BASE + href
+    return href
+
+
+def _extract_li_url(li: Tag) -> str:
+    """``<li>`` 안에서 의미있는 첫 URL을 찾아 반환합니다."""
+    for a in li.find_all("a", href=True):
+        href = a.get("href", "")
+        if _is_meaningful_href(href):
+            return _absolutize(href)
+    return ""
+
+
+def _extract_li_title(li: Tag) -> str:
+    """``<li>`` 안에서 가장 그럴듯한 제목 텍스트를 반환합니다.
+
+    "사이트 가기" 같은 보조 텍스트는 건너뛰고, 충분히 긴 첫 번째 링크
+    텍스트를 우선합니다. 적절한 링크 텍스트가 없으면 ``<strong>`` 텍스트로 fallback.
+    """
+    skip_tokens = {"사이트가기", "사이트 가기", "바로가기"}
+
+    candidates: list[str] = []
+    for a in li.find_all("a"):
+        text = " ".join(a.get_text(" ", strip=True).split())
+        if not text:
+            continue
+        normalized = text.replace(" ", "")
+        if normalized in {t.replace(" ", "") for t in skip_tokens}:
+            continue
+        candidates.append(text)
+
+    if candidates:
+        # 너무 짧은 후보(URL 텍스트 등)보다 의미있는 길이의 첫 번째를 선호.
+        for c in candidates:
+            if len(c) >= 4:
+                return c
+        return candidates[0]
+
+    strong = li.find("strong")
+    if strong:
+        return " ".join(strong.get_text(" ", strip=True).split())
+    return ""
+
+
+def _extract_li_snippet(li: Tag) -> str:
+    """``span.item`` 들과 ``<strong>`` 의 텍스트를 합쳐 짧은 설명을 만듭니다."""
+    parts: list[str] = []
+    strong = li.find("strong")
+    if strong:
+        text = " ".join(strong.get_text(" ", strip=True).split())
+        if text:
+            parts.append(text)
+    for span in li.find_all("span", class_="item"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if text:
+            parts.append(text)
+    snippet = " | ".join(parts)
+    if len(snippet) > 300:
+        snippet = snippet[:297] + "..."
+    return snippet
+
+
+def _extract_li_meta(li: Tag) -> dict[str, Any]:
+    """카테고리에 무관한 부가 정보 dict.
+
+    상세한 분류 대신 ``items`` 라는 단일 키에 ``span.item`` 텍스트 리스트를 담아
+    LLM이 직접 해석하도록 위임합니다.
+    """
+    items: list[str] = []
+    for span in li.find_all("span", class_="item"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if text:
+            items.append(text)
+    return {"items": items} if items else {}
+
+
+def _parse_li(li: Tag, category: str) -> dict[str, Any] | None:
+    """``<li>`` 하나를 정규화된 결과 dict로 변환합니다.
+
+    URL과 title 둘 다 비어있으면 placeholder/no-result 항목으로 보고 None 반환.
+    """
+    url = _extract_li_url(li)
+    title = _extract_li_title(li)
+    if not url and not title:
+        return None
+    return {
+        "title": title,
+        "snippet": _extract_li_snippet(li),
+        "url": url,
+        "category": category,
+        "meta": _extract_li_meta(li),
+    }
+
+
+def _parse_related_queries(soup: BeautifulSoup) -> list[str]:
+    """``form_keyword1`` 탭의 ``_btn_recommend`` 버튼에서 연관검색어를 추출합니다."""
+    container = soup.find("div", id="form_keyword1")
+    if not container or not isinstance(container, Tag):
+        return []
+    out: list[str] = []
+    for btn in container.find_all("button", attrs={"name": "_btn_recommend"}):
+        text = " ".join(btn.get_text(" ", strip=True).split())
+        if text and text not in out:
+            out.append(text)
+    return out[:5]
+
+
 def _parse_work24_html(html: str) -> tuple[list[dict[str, Any]], list[str]]:
     """고용24 통합검색 결과 HTML을 정규화된 결과 리스트 + 연관검색어로 파싱합니다.
-
-    Phase 2 단계에서 구현됩니다. 현재는 빈 결과를 반환합니다.
 
     Returns:
         (results, related_queries)
         results: ``{"title", "snippet", "url", "category", "meta"}`` dict의 리스트
         related_queries: 연관검색어 문자열 리스트 (최대 5개)
+
+    파싱 실패 시 빈 튜플 ``([], [])`` 을 반환합니다 (caller가 graceful degradation).
     """
-    return [], []
+    if not html:
+        return [], []
+    try:
+        soup = BeautifulSoup(html, "html.parser")
+    except Exception:
+        _log.exception("BeautifulSoup parsing failed")
+        return [], []
+
+    results: list[dict[str, Any]] = []
+    for stit in soup.select("div.stit_area"):
+        cat_span = stit.select_one("span.t2_sb")
+        if not cat_span:
+            continue
+        category = " ".join(cat_span.get_text(" ", strip=True).split())
+        if not category:
+            continue
+
+        header = stit.parent
+        if not isinstance(header, Tag):
+            continue
+        section = header.find_next_sibling("div", class_="result_view")
+        if not isinstance(section, Tag):
+            continue
+        ul = section.select_one("ul.srch_list_default")
+        if not isinstance(ul, Tag):
+            continue
+
+        for li in ul.find_all("li", recursive=False):
+            parsed = _parse_li(li, category)
+            if parsed is not None:
+                results.append(parsed)
+
+    related = _parse_related_queries(soup)
+    return results, related
 
 
 # ── Fetcher (Phase 1: stub, Phase 3: 실제 HTTP) ──────────────────
@@ -104,45 +276,41 @@ async def fetch_work24_search(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """고용24 통합검색을 호출해 정규화된 결과 + 연관검색어를 반환합니다.
 
-    실패 시 빈 리스트를 반환합니다 (요약 파이프라인이 멈추지 않게).
+    실패 시 빈 리스트 + 경고 로그 (요약 파이프라인이 멈추지 않게).
 
-    Phase 1: 하드코딩된 stub 데이터 반환.
-    Phase 3에서 ``httpx.AsyncClient`` + ``_parse_work24_html`` 로 교체됩니다.
+    NOTE: 공식 API가 아니라 공개 페이지의 HTML 스크래핑입니다.
+    work24가 API를 제공하면 그쪽으로 교체하는 것을 권장합니다.
     """
-    _log.info("fetch_work24_search(stub) query=%r list_count=%d", query, list_count)
+    if not query:
+        return [], []
 
-    stub_results: list[dict[str, Any]] = [
-        {
-            "title": f"[채용] {query} 관련 채용공고 샘플",
-            "snippet": "샘플 채용 공고 설명입니다.",
-            "url": "https://www.work24.go.kr/sample/recruit/1",
-            "category": "채용",
-            "meta": {"company": "샘플회사", "location": "서울"},
-        },
-        {
-            "title": f"[정책] {query} 지원 정책 안내",
-            "snippet": "샘플 정책 설명입니다.",
-            "url": "https://www.work24.go.kr/sample/policy/1",
-            "category": "정책",
-            "meta": {},
-        },
-        {
-            "title": f"[훈련] {query} 직업훈련 과정",
-            "snippet": "샘플 훈련 과정 설명입니다.",
-            "url": "https://www.work24.go.kr/sample/training/1",
-            "category": "훈련",
-            "meta": {"institution": "샘플훈련원"},
-        },
-        {
-            "title": f"[뉴스·자료] {query} 관련 뉴스",
-            "snippet": "샘플 뉴스 설명입니다.",
-            "url": "https://www.work24.go.kr/sample/news/1",
-            "category": "뉴스·자료",
-            "meta": {"published_at": "2026-04-01"},
-        },
-    ][:list_count]
-    stub_related = [f"{query} 지원금", f"{query} 자격증", f"{query} 후기"]
-    return stub_results, stub_related
+    params = {
+        "topQuerySearchArea": "all",
+        "topQueryData": query,
+        "sortField": "rank",
+        "startCount": "1",
+        "listCount": str(list_count),
+    }
+    headers = {"User-Agent": _WORK24_USER_AGENT}
+
+    try:
+        async with httpx.AsyncClient(
+            base_url=_WORK24_BASE,
+            timeout=_WORK24_HTTP_TIMEOUT,
+            headers=headers,
+            follow_redirects=True,
+        ) as client:
+            response = await client.get(_WORK24_SEARCH_PATH, params=params)
+            response.raise_for_status()
+            html = response.text
+    except httpx.HTTPError:
+        _log.exception("work24 fetch failed for query=%r", query)
+        return [], []
+    except Exception:
+        _log.exception("unexpected error while fetching work24 query=%r", query)
+        return [], []
+
+    return _parse_work24_html(html)
 
 
 # ── 결정론 헬퍼 ─────────────────────────────────────────────────

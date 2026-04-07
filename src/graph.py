@@ -24,7 +24,7 @@ def _read_preset() -> str:
     config_path = find_project_root() / "langgraph.json"
     if not config_path.exists():
         return "custom"
-    raw = json.loads(config_path.read_text())
+    raw = json.loads(config_path.read_text(encoding="utf-8"))
     return raw.get("preset", "custom")
 
 

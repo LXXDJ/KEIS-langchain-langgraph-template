@@ -632,6 +632,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "deepagents" },
+    { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-core" },
     { name = "langchain-openai" },
@@ -653,6 +654,7 @@ dev = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "deepagents", specifier = ">=0.4.11" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "langchain", specifier = ">=1.2.13" },
     { name = "langchain-core", specifier = ">=1.2.20" },
     { name = "langchain-openai", specifier = ">=1.1.11" },

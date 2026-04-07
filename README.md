@@ -94,28 +94,30 @@ START → preprocess → worker_search_summary → postprocessor → END
 | Phase | 내용 | 상태 |
 |---|---|---|
 | **Phase 1** | 스켈레톤 + stub fetcher (하드코딩 fake 결과). 모든 노드/preset/등록/테스트 완성. 머지 가능 상태. | ✅ 완료 |
-| **Phase 2** | 실제 work24 페이지 HTML을 fixture로 캡처하고 BeautifulSoup 파서(`_parse_work24_html`) 구현. 카테고리별 셀렉터 정의. 파서 단위 테스트 추가. | ⏳ 예정 |
-| **Phase 3** | `httpx.AsyncClient`로 실제 HTTP 호출 결선. User-Agent 헤더, timeout=5.0, 예외 처리. 통합 테스트(`@pytest.mark.integration`). | ⏳ 예정 |
+| **Phase 2** | 실제 work24 페이지 HTML을 fixture로 캡처(`tests/fixtures/work24_sample.html`)하고 BeautifulSoup 파서(`_parse_work24_html`) 구현. 카테고리별 셀렉터 + 연관검색어 추출 + URL 절대화. 파서 단위 테스트 7건 추가. | ✅ 완료 |
+| **Phase 3** | `httpx.AsyncClient`로 실제 HTTP 호출 결선. 명시 User-Agent, `timeout=5.0`, `follow_redirects=True`, 모든 예외 catch → 빈 결과 + 경고 로그. | ✅ 완료 |
 
-### Phase 1 — 완료된 작업
+### 완료된 작업 (Phase 1 + 2 + 3)
 
-**신규 파일 (3):**
+**신규 파일 (4):**
 - `src/agents/nodes/worker_search_summary.py` — worker 노드 + 모든 private 헬퍼
   - `_classify_intent`, `_summarize` (LLM 호출, 테스트에서 monkeypatch)
   - `_select_top_k_by_category`, `_build_navigation` (결정론, 순수 함수)
-  - `fetch_work24_search` (Phase 1: stub, Phase 3: 실제 HTTP)
-  - `_parse_work24_html` (Phase 1: 빈 stub, Phase 2: BeautifulSoup 구현)
+  - `_parse_work24_html` (BeautifulSoup으로 카테고리/제목/URL/snippet/연관검색어 추출)
+  - `fetch_work24_search` (httpx.AsyncClient로 work24 통합검색 호출)
   - `_IntentResult` Pydantic 모델, `_INTENT_SYSTEM_PROMPT` / `_SUMMARY_SYSTEM_PROMPT` 상수
   - `_DEFAULT_CATEGORY_RANKING` (LLM 실패 시 fallback)
 - `src/agents/presets/ai_search_summary.py` — `build_ai_search_summary()` 빌더 (custom.py 구조 그대로)
-- `tests/test_ai_search_summary.py` — 단위/통합 테스트 11개
+- `tests/test_ai_search_summary.py` — 단위/통합 테스트 18건
+- `tests/fixtures/work24_sample.html` — 실제 work24 응답 캡처 (파서 회귀 방지)
 
-**수정 파일 (5):**
-- `pyproject.toml` — `beautifulsoup4>=4.12` 추가 (Phase 2 대비)
+**수정 파일 (6):**
+- `pyproject.toml` — `beautifulsoup4>=4.12`, `httpx>=0.28` 추가
 - `src/agents/nodes/__init__.py` — `worker_search_summary` export
 - `src/agents/presets/__init__.py` — `build_ai_search_summary` export
 - `src/agents/registry.py` — `PresetInfo` 등록
 - `src/agents/graph_builder.py` — `Preset` Literal과 `_BUILDERS`에 추가
+- `src/graph.py` — `langgraph.json` 읽을 때 `encoding="utf-8"` 명시 (Windows cp949 회귀 수정)
 
 **의도적으로 건드리지 않은 파일:**
 - `src/agents/state.py` — 새 필드 추가 없음 (`_worker_outputs` 재사용)
@@ -156,8 +158,8 @@ print(payload["related_queries"])
 
 이후 `./scripts/run-local.sh`로 띄우면 LangServe가 새 preset의 그래프를 expose한다.
 
-> ⚠️ Phase 1 단계에서는 `fetch_work24_search`가 stub 데이터를 반환하므로,
-> 실제 work24 결과가 아니라 하드코딩된 샘플이 요약된다. Phase 3 완료 후 실데이터로 동작.
+> Phase 3까지 완료되어 실제 work24 통합검색을 호출한다. `OPENAI_API_KEY`가
+> 설정돼 있으면 의도 분류 + 한국어 2~3줄 요약까지 정상 동작.
 
 ---
 
@@ -167,8 +169,17 @@ I/O 경계에서만 mock하고 순수 함수는 직접 단위 테스트.
 
 ### 테스트 목록 (`tests/test_ai_search_summary.py`)
 
+총 18건. 실제 LLM/HTTP 호출 없이 모두 통과한다.
+
 | 테스트 | 대상 | 방식 |
 |---|---|---|
+| `test_parse_work24_html_returns_results_and_related` | `_parse_work24_html` | fixture HTML |
+| `test_parse_work24_html_results_have_required_fields` | 동일 | 필수 필드 검증 |
+| `test_parse_work24_html_covers_multiple_categories` | 동일 | 채용/훈련/뉴스·자료 포함 |
+| `test_parse_work24_html_absolutizes_relative_urls` | 동일 | URL 절대화 |
+| `test_parse_work24_html_empty_input_returns_empty` | 동일 | 빈 입력 처리 |
+| `test_parse_work24_html_garbage_input_returns_empty` | 동일 | work24 구조 아닌 HTML |
+| `test_parse_work24_html_truncated_input_does_not_raise` | 동일 | 잘린 HTML 예외 안 던짐 |
 | `test_select_top_k_orders_by_ranking` | `_select_top_k_by_category` | 순수 함수 단위 |
 | `test_select_top_k_truncates_to_k` | 동일 | 순수 함수 단위 |
 | `test_select_top_k_unknown_category_goes_last` | 동일 | 순수 함수 단위 |
@@ -214,18 +225,9 @@ wss = importlib.import_module("agents.nodes.worker_search_summary")
 
 ---
 
-## 알려진 이슈
-
-- **`tests/test_graph_loader.py` 2건 실패 (pre-existing)**: `src/graph.py:27`이 `langgraph.json`을
-  `read_text()`로 읽을 때 encoding을 명시하지 않아, Windows 한국어 로케일(cp949)에서
-  한국어 description을 디코딩하지 못함. 본 작업과 무관한 별개 이슈.
-
----
-
 ## 참고 파일
 
-- 설계 노트: `C:\Users\jack1\.claude\plans\synthetic-noodling-moon.md`
-- 루트 컨벤션: [CLAUDE.md](../../CLAUDE.md)
-- 에이전트 컨벤션: [src/agents/CLAUDE.md](../../src/agents/CLAUDE.md)
-- 참고 preset: [src/agents/presets/custom.py](../../src/agents/presets/custom.py)
-- 참고 worker: [src/agents/nodes/worker_chat.py](../../src/agents/nodes/worker_chat.py)
+- 루트 컨벤션: [CLAUDE.md](CLAUDE.md)
+- 에이전트 컨벤션: [src/agents/CLAUDE.md](src/agents/CLAUDE.md)
+- 참고 preset: [src/agents/presets/custom.py](src/agents/presets/custom.py)
+- 참고 worker: [src/agents/nodes/worker_chat.py](src/agents/nodes/worker_chat.py)
