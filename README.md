@@ -645,14 +645,12 @@ class Context(TypedDict, total=False):
 1줄짜리지만, 다른 에이전트(SVC-1 등)가 추가되면 여기에 등록만 하면 됩니다.
 
 ```python
-Preset = Literal["ai_search_summary"]
-
 _BUILDERS: dict[str, Any] = {
     "ai_search_summary": build_ai_search_summary,
 }
 
 def build_graph(
-    preset: Preset = "ai_search_summary",
+    preset: str = "ai_search_summary",
     **kwargs: Any,
 ) -> CompiledStateGraph:
     builder_fn = _BUILDERS.get(preset)
@@ -661,6 +659,10 @@ def build_graph(
         raise ValueError(f"Unknown preset '{preset}'. Available: {available}")
     return builder_fn(**kwargs)
 ```
+
+> 이 단순한 형태(`Preset` Literal 없음, `registry.py` 없음)는 main 템플릿이
+> 의도적으로 채택한 방향입니다. 자세한 정렬 이력은 본 문서 하단의
+> [main 템플릿 정렬 작업](#main-템플릿-정렬-작업) 섹션을 참고하세요.
 
 ## 서빙 레이어 — [app/](app/)
 
@@ -671,7 +673,6 @@ LangServe 가 그래프 한 줄을 받아 표준 HTTP 엔드포인트를 만들�
 /agent/stream           POST  스트리밍
 /agent/playground/      GET   브라우저 UI
 /health                 GET   서비스 상태
-/presets                GET   등록된 preset 목록
 /docs                   GET   Swagger UI
 ```
 
@@ -950,6 +951,52 @@ OpenSearch / DeepAgents / 미들웨어 / 백엔드 등은 SVC-3 가 사용하지
   의 "preset 추가 절차" 따라가기.
 - **공식 work24 API 가 나오면** → `fetch_work24_search` 본문만 교체.
   나머지(파서·worker·preset)는 그대로 둬도 됨.
+
+## main 템플릿 정렬 작업
+
+이 브랜치는 한때 자체적인 preset 메타데이터 레이어(`registry.py`, `Preset` Literal,
+`/presets` 엔드포인트)를 도입했었지만, **상위 main 템플릿이 이후 단순화 방향으로
+진화**하면서(`fix: Preset Literal 삭제`, `fix: 복잡한 Preset 관련 내용 삭제` 커밋 등)
+양쪽이 정반대로 갈라진 시점이 있었습니다.
+
+본 브랜치를 main 의 단순화 방향에 다시 맞춰 정리한 작업 내역입니다. 비즈니스
+로직(work24 fetcher, 파서, LLM 요약, 테스트, fixture)은 **전혀 손대지 않았습니다.**
+
+### 변경 요약 — Before / After
+
+| 항목 | Before (이 브랜치 자체 방향) | After (main 정렬) |
+|---|---|---|
+| `src/agents/registry.py` | `PresetInfo` dataclass + `PRESETS` dict + `list_presets()` / `get_preset()` 존재 | **파일 삭제**. preset 메타데이터 레이어를 두지 않음 |
+| `src/agents/graph_builder.py` | `Preset = Literal["ai_search_summary"]` 정의, `preset: Preset` 시그니처 | `Literal` 제거, `preset: str` 로 환원. `_BUILDERS` dict 만 단일 진실의 원천으로 유지 |
+| `src/agents/__init__.py` | `Preset`, `PresetInfo`, `get_preset`, `list_presets` 추가 export | `build_graph` 와 State 타입만 export — main 과 동일한 단순한 표면 |
+| `app/utils/server.py` | `/presets` REST 엔드포인트 + `list_presets` import + `# type: ignore[arg-type]` 주석 | `/presets` 엔드포인트 제거, `list_presets` import 제거, `type: ignore` 도 제거 |
+| `app/CLAUDE.md` | `from agents import build_graph, list_presets` 안내 + "presets 등" 문구 | `from agents import build_graph` 로 환원 |
+| `src/agents/CLAUDE.md` | preset 추가 절차에 "registry.py 등록" + "Preset Literal 추가" 단계 포함 | 두 단계 삭제. `_BUILDERS` dict 한 줄 추가만 남김 |
+| `README.md` (graph_builder 스니펫) | `Preset = Literal[...]` 가 포함된 코드 예시 | `_BUILDERS` dict 만 보여주는 단순화된 예시 + 본 섹션으로의 링크 |
+
+### 변경하지 않은 것 (의도적으로 그대로 둔 것)
+
+- **`src/agents/state.py`** — main 과 두 브랜치가 동일하므로 손대지 않음
+- **`src/agents/nodes/worker_search_summary.py`** (727 줄) — SVC-3 핵심 로직, 전부 유지
+- **`src/agents/nodes/preprocess.py` / `postprocessor.py`** — 그대로 재사용
+- **`tests/test_ai_search_summary.py` / `tests/fixtures/work24_sample.html`** — 변경 없음
+- **`scripts/try_search_summary.py`** — 변경 없음
+- **`pyproject.toml` / `uv.lock`** — 의존성 변경 없음
+- **삭제됐던 backends/middlewares/skills/tools 등** — 본 브랜치에서는 이미 없는 상태이며, 본 정렬 작업에서 되살리지도 않음 (필요해지면 그때 main 에서 가져오면 됨)
+
+### 정렬 후 효과
+
+- 새 preset 을 추가할 때 손대야 할 파일이 **3개 → 2개** 로 줄어듦
+  (registry.py 등록 단계 사라짐, `Preset` Literal 갱신 단계 사라짐)
+- main 과의 구조적 차이가 SVC-3 전용 코드 자체에만 집중되어, 추후 main 의
+  upstream 변경을 다시 가져올 때 충돌 가능성이 줄어듦
+- 공개 API 표면(`agents.__init__`)이 main 과 동일해져 향후 임베드/재사용이 단순해짐
+
+### 향후 main 에서 변경이 또 들어올 때
+
+1. `git fetch upstream && git log main..upstream/main` 로 incoming 커밋 확인
+2. 비즈니스 로직(`worker_search_summary.py` 등)과 무관한 변경이면 cherry-pick 또는 merge 시도
+3. 충돌 시 — 본 섹션 표를 참고하여 main 의 단순화 방향을 우선 채택
 
 ## 참고 문서
 

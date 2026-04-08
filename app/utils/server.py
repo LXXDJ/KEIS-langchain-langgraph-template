@@ -10,7 +10,7 @@ from langchain_core.messages import AnyMessage
 from langserve import add_routes
 from pydantic import BaseModel
 
-from agents import build_graph, list_presets
+from agents import build_graph
 from app.utils.langgraph_loader import load_graph, load_langgraph_config
 
 _log = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ def create_app() -> FastAPI:
     if graph_config and graph_config.path:
         graph = load_graph(graph_config.path)
     else:
-        graph = build_graph(preset=preset)  # type: ignore[arg-type]
+        graph = build_graph(preset=preset)
 
     # ── URI 경로 구성 ─────────────────────────────────────────
     base_path = f"/{graph_config.name}" if graph_config else "/default"
@@ -103,16 +103,5 @@ def create_app() -> FastAPI:
             "playground": f"{base_path}/playground/",
             "docs": "/docs",
         }
-
-    @application.get("/presets")
-    def presets() -> list[dict]:
-        return [
-            {
-                "name": p.name,
-                "description": p.description,
-                "factory": p.factory,
-            }
-            for p in list_presets()
-        ]
 
     return application
