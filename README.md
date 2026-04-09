@@ -1,7 +1,39 @@
 # 고용24 AI 검색 결과 요약 (SVC-3)
 
-고용24(work24.go.kr) 통합검색 결과를 **카테고리별로 AI 요약**하여 제공하는 서비스.
-LangChain / LangGraph / LangServe 기반.
+---
+
+검색어: 고용
+
+📊 카테고리 카드 (5)
+
+[정책] (summary, 20건)
+  총 3개의 고용 관련 정책이 있습니다. 첫째, 장애인 신규 고용 장려금은 상시근로자 5인 이상 50인 미만 사업주가 장애인 근로자를 신규 고용하고 6개월 이상 고용 유지 시 지원됩니다. 둘째, 특별 고용 지원 업종 정책은 사업주나 단체가 신청 가능하며, 특정 업종에 대한 지원이 이루어집니다. 고용의 허가제도 또한 존재하지만 상세 내용이 제공되지 않았습니다.
+  ↳ 최상위: 고용 촉진장려금
+    https://www.work24.go.kr/cm/c/f/1100/selecSystInfo.do?currentPageNo=1&recordCountPerPage=10&systId=SI00000370&systClId=SC00000119
+  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=policy&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
+
+[채용] (summary, 20건)
+  총 5개의 채용 공고가 있습니다. 주요 직무는 기간제근로자(통계조사관)이며, 고용형태는 계약직과 정규직이 혼합되어 있습니다. 지역은 강원, 대전, 세종, 경북 등 다양하며, 마감 임박 건수는 1건(D-7 이내)입니다.
+  ↳ 최상위: 중부지방 고용 노동청 기간제근로자(통계조사관) 채용
+    https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=K152412604080023&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet
+  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=workinfo&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
+
+[훈련] (summary, 20건)
+  총 5개의 과정이 확인되었습니다. 이 중 2개 과정은 국비지원으로 자기부담금이 0이며, 나머지 3개는 유료 과정입니다. 주요 과정 분야는 외국인 고용과 직업상담사 관련이며, 평균적인 훈련기간은 약 52일입니다.
+  ↳ 최상위: 외국인의 고용 과 VISA 실무
+    https://www.work24.go.kr/hr/a/a/3100/selectTracseDetl.do?tracseId=ABA20253001133755&tracseTme=153&crseTracseSe=C0041&trainstCstmrId=500044312625
+  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=training&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
+
+[뉴스·자료] (summary, 18건)
+  총 6개의 자료가 검색되었습니다. 주요 주제는 AI 고용 서비스와 일·가정 양립 지원입니다. 가장 최근 자료는 2026년 1월 9일에 발행된 이벤트로, 고용24에서 이력서를 갱신하면 2026년 탁상 달력을 선착순으로 제공하는 내용입니다.
+  ↳ 최상위: 고용 AI 4종 공개…좋은 질문하면 기프티콘이 쏟아진다!
+    https://www.work24.go.kr/cm/c/b/0130/selectBbttInfo.do?ntceStno=49&bbsClCd=%2BWhIYyX4MTPwl6gr4E19tQ%3D%3D
+  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=news&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
+
+[직업·진로] (summary, 20건)
+  총 5개의 자료가 있습니다. 주요 직업/진로 관련 주제는 '고용 변동 요인 분석'과 '고용 안정성'입니다. 가장 관련성 높은 자료는 '직종별 고용 변동 요인 분석'으로, 다양한 직종(보건의료, 디자인, 건설 등)의 고용 변동 요인을 다루고 있습니다.
+  ↳ 최상위: 직종별 고용 변동 요인 분석
+  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=jobCourse&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
 
 ---
 
@@ -10,8 +42,8 @@ LangChain / LangGraph / LangServe 기반.
 ## 배경과 목표
 
 **검색 결과가 있는 카테고리별로 2~3줄 AI 요약 카드**를 제공하여,
-사용자가:
 
+사용자가:
 - 각 카테고리에 어떤 정보가 있는지 **즉시 파악**하고
 - **원문 url 제공**하여
 - **전체 결과 페이지로 이동**할 수 있도록 합니다.
@@ -28,9 +60,8 @@ LangChain / LangGraph / LangServe 기반.
 
 ## 요약 대상 카테고리와 제외 카테고리
 
-9개 카테고리 중 **5개만 AI 요약을 제공**합니다. 나머지 4개는 요약하지 않습니다.
-이 결정은 각 카테고리에서 work24 가 제공하는 **데이터의 형태와 풍부함**에 따른
-것입니다.
+각 카테고리에서 work24 가 제공하는 **데이터**에 따라 9개 카테고리 중 **5개만 AI 요약을 제공**합니다.
+
 
 ### 요약 제공 카테고리 (5개)
 
@@ -42,7 +73,7 @@ LangChain / LangGraph / LangServe 기반.
 | **뉴스·자료** | 본문 발췌 텍스트가 함께 제공되어 LLM 요약이 가장 효과적 | 제목 + 발행일 + 본문 발췌 + 출처 + 태그 |
 | **직업·진로** | 가이드 글 형태로 본문 발췌가 있어 주제 파악과 요약이 가능 | 제목 + 발행일 + 본문 발췌 + 출처 + 태그 |
 
-### 요약 미제공 카테고리 (4개) — 제외 이유
+### 요약 미제공 카테고리 (4개)
 
 | 카테고리 | 제외 이유 |
 |---|---|
@@ -72,17 +103,11 @@ LangChain / LangGraph / LangServe 기반.
 - **훈련**: "총 5개 과정. 국비지원 3개, 유료 2개. 주요 분야는 외국인 고용 및 직업 상담. 평균 훈련기간 약 30일."
 - **정책**: "상시근로자 5인 이상 50인 미만 사업주가 장애인 근로자를 신규 고용하고 6개월 이상 유지 시 장려금 지원. 주요 대상자는 사업주와 장애인."
 
-각 요약 카드에는 2개의 URL 이 포함됩니다:
-
-- **최상위 결과 URL (`top_result`)**: work24 에서 해당 카테고리의 가장 첫 번째 결과로
-  이동하는 링크. 대부분의 카테고리에서 정확도순(RANK) 으로 정렬되므로 검색어와
-  가장 관련도가 높은 결과입니다. (훈련 카테고리만 날짜순(DATE) 정렬 — 사용자에게
-  가치 있는 정보가 "지금 신청 가능한 최신 과정" 이기 때문)
-- **더 보기 URL (`more_url`)**: work24 통합검색의 해당 카테고리 탭으로 이동하는
-  deep link. 예: `정책` 카드의 more_url → work24 정책 탭 결과 페이지.
-  검색어가 이중 URL 인코딩되어 있어 work24 가 그대로 인식합니다.
-
-
+각 요약 카드에는 **최상위 결과 URL (`top_result`)** 이 포함됩니다. work24 에서 해당
+카테고리의 가장 첫 번째 결과로 이동하는 링크이며, 대부분의 카테고리에서
+정확도순(RANK) 으로 정렬되므로 검색어와 가장 관련도가 높은 결과입니다.
+(훈련 카테고리만 날짜순(DATE) 정렬 — 사용자에게 가치 있는 정보가 "지금 신청 가능한
+최신 과정" 이기 때문)
 
 ## 출력 스키마
 
@@ -100,27 +125,23 @@ LangChain / LangGraph / LangServe 기반.
         "title": "청년 디지털 일자리 사업",
         "url": "https://www.work24.go.kr/..."
       },
-      "result_count": 4,
-      "more_url": "https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=policy&..."
+      "result_count": 4
     },
     {
       "category": "채용",
       "type": "summary",
       "summary": "AI 관련 채용공고 12건. 머신러닝 엔지니어 위주, 서울 8건...",
       "top_result": { "title": "...", "url": "..." },
-      "result_count": 12,
-      "more_url": "..."
+      "result_count": 12
     }
   ],
-  "related_queries": ["인공지능 개발", "머신러닝", "..."],
-  "related_jobs": ["연구 및 공학기술 > 소프트웨어 > 응용 소프트웨어 개발자"],
   "meta": {
     "result_count_total": 178,
     "result_count_by_category": {
       "신고·신청": 20, "정책": 4, "채용": 12, "기업": 8,
       "훈련": 7, "뉴스·자료": 18, "직업·진로": 20, "자격": 20, "기타": 20
     },
-    "fetched_at": "2026-04-09T06:42:11+00:00"
+    "fetched_at": "2026-04-10T06:42:11+00:00"
   }
 }
 ```
@@ -136,23 +157,19 @@ LangChain / LangGraph / LangServe 기반.
 | `categories[].summary` | LLM 이 생성한 한국어 2~3줄 요약 (200자 이내) |
 | `categories[].top_result` | 해당 카테고리의 최상위 결과 `{title, url}`. 결과가 없으면 `null` |
 | `categories[].result_count` | 해당 카테고리에서 가져온 결과 건수 |
-| `categories[].more_url` | work24 해당 카테고리 검색 결과 페이지 deep link |
-| `related_queries` | work24 제공 연관검색어 (최대 5개) |
-| `related_jobs` | work24 제공 연관직종 (최대 2개) |
 | `meta.result_count_total` | 전체 결과 건수 (요약 미제공 카테고리 포함) |
 | `meta.result_count_by_category` | **모든 9개 카테고리의 건수** (요약 미제공 카테고리도 포함) |
 | `meta.fetched_at` | 응답 생성 시각 (UTC ISO 8601) |
 
 > `meta.result_count_by_category` 에는 요약하지 않는 카테고리(신고·신청, 기업, 자격, 기타)
-> 의 건수도 포함됩니다. 프론트엔드가 이 건수를 활용해 "자격 449건 더 보기" 같은
+> 의 건수도 포함됩니다. 프론트엔드가 이 건수를 활용해 "자격 449건" 같은
 > 카운트 표시나 탭 뱃지를 구현할 수 있습니다.
 
 ## 모델 정책 — 왜 외부 LLM(GPT-4o mini)을 써도 되는가
 
 요약 대상이 **공개 검색 결과만**이고 개인정보를 포함하지 않기 때문입니다.
 일자리검색(SVC-1)은 개인정보를 다루므로 별도 에이전트로 분리되며, 본 서비스(SVC-3)는
-공개 데이터만 외부 API로 보내는 구조이기에 GPT-4o mini 같은 상용 LLM을 자유롭게
-사용할 수 있습니다.
+공개 데이터만 외부 API로 보내는 구조이기에 GPT-4o mini 같은 상용 LLM을 자유롭게 사용할 수 있습니다.
 
 GPT-4o mini를 선택한 이유:
 - 짧은 한국어 요약(2~3줄)에 충분한 품질
@@ -166,7 +183,7 @@ GPT-4o mini를 선택한 이유:
   제공되면 교체하는 것이 본질적인 해결책입니다.
 - **카테고리당 최대 20건**: work24 전체 탭에서 카테고리당 최대 20건만 가져옵니다.
   실제 검색 결과가 수천 건이어도 요약 입력은 상위 5건(기본값) 을 사용합니다.
-  나머지는 `more_url` deep link 로 사용자가 직접 탐색합니다.
+  나머지는 사용자가 work24 에서 직접 탐색합니다.
 - **전체 탭 미렌더링 카테고리**: work24 는 특정 검색어에 대해 일부 카테고리의
   결과 섹션을 전체 탭에서 렌더링하지 않습니다 (해당 카테고리의 결과 건수가 0인
   경우). 이 경우 해당 카테고리의 카드는 생성되지 않습니다.
@@ -197,7 +214,7 @@ cp .env.example .env
 # .env 안의 OPENAI_API_KEY 를 본인 키로 교체
 
 # 3. 한 번 호출해 보기 (서버 없이)
-uv run python scripts/try_search_summary.py "AI 직업훈련"
+uv run python scripts/try_search_summary.py "고용"
 
 # 4. LangServe 로 띄우기
 ./scripts/run-local.sh
@@ -323,7 +340,7 @@ state["messages"] (입력)
    HTTP GET work24 통합검색 → BeautifulSoup 파싱
         │
         ▼
-   results: list[dict] + related_queries + related_jobs
+   results: list[dict]
         │
         ▼
 ③ _group_by_category(results)
@@ -345,7 +362,7 @@ state["messages"] (입력)
    cards: list[dict]   (summary 카드만)
         │
         ▼
-⑤ payload = {query, categories, related_queries, related_jobs, meta}
+⑤ payload = {query, categories, meta}
    json.dumps(...) → _worker_outputs 에 push
 ```
 
@@ -392,17 +409,13 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     search_result_count = _search_result_count()      # SEARCH_RESULT_COUNT (env)
     summary_input_count = _summary_input_count()      # SUMMARY_INPUT_COUNT (env)
 
-    results, related_queries, related_jobs = await fetch_work24_search(
-        query, list_count=search_result_count
-    )
+    results = await fetch_work24_search(query, list_count=search_result_count)
     by_category = _group_by_category(results)
     cards = await _build_category_cards(query, by_category, summary_input_count)
 
     payload = {
         "query": query,
         "categories": cards,
-        "related_queries": related_queries[:5],
-        "related_jobs": related_jobs[:2],
         "meta": {
             "result_count_total": len(results),
             "result_count_by_category": {
@@ -522,9 +535,7 @@ def _parse_work24_html(
             if parsed is not None:
                 results.append(parsed)
 
-    related_queries = _parse_related_queries(soup)
-    related_jobs = _parse_related_jobs(soup)
-    return results, related_queries, related_jobs
+    return results
 ```
 
 work24 의 마크업 구조 ↔ 우리가 추출하는 데이터 매핑:
@@ -536,8 +547,6 @@ work24 의 마크업 구조 ↔ 우리가 추출하는 데이터 매핑:
 | 의미있는 첫 `<a href>` (javascript:/# 제외) | 결과 URL (상대→절대 변환) |
 | `<a>` 텍스트 / `<strong>` fallback | 결과 title |
 | `span.item` 들 + `<strong>` | snippet |
-| `div#form_keyword1 button[name=_btn_recommend]` | 연관검색어 (최대 5) |
-| `div#form_keyword2 button[name=_btn_jobsCategor]` | 연관직종 (최대 2) |
 
 파서는 의도적으로 **정규화된 단일 스키마**(`{title, snippet, url, category, meta}`)를
 출력합니다. 카테고리마다 채용/훈련/뉴스 등 필드 구조가 다르지만, 그 이질성은
@@ -649,31 +658,7 @@ async def _summarize_for_category(
 LLM 호출이 실패하면 top-1 결과의 title 을 그대로 echo 합니다. 사용자에게는 항상
 최소한 무언가 의미 있는 텍스트가 노출됩니다.
 
-#### ⑥ more_url 생성 — `_build_more_url`
-
-각 카테고리 카드에는 work24 의 해당 카테고리 결과 페이지로 이동하는 deep link
-(`more_url`) 가 포함됩니다. work24 의 ``selectUnifySearch.do`` URL 은 ``topQueryData``
-파라미터를 **이중 URL 인코딩** (예: '고용' → '%25EA%25B3%25A0%25EC%259A%25A9') 으로
-받기 때문에 `urllib.parse.quote` 를 두 번 호출합니다.
-
-```python
-def _build_more_url(category: str, query: str) -> str:
-    area = _CATEGORY_SEARCH_AREA.get(category, "")
-    if not area:
-        return ""
-    encoded_query = urllib.parse.quote(urllib.parse.quote(query, safe=""), safe="")
-    return (
-        f"{_WORK24_BASE}{_WORK24_SEARCH_PATH}"
-        f"?topQuerySearchArea={area}"
-        f"&topQueryData={encoded_query}"
-        f"&sortField=rank"
-    )
-```
-
-`_CATEGORY_SEARCH_AREA` 는 `신고·신청 → report`, `채용 → workinfo`, `훈련 → training`
-같은 매핑입니다.
-
-#### ⑦ 출력 직렬화
+#### ⑥ 출력 직렬화
 
 worker 함수의 마지막 단계 — payload 를 `json.dumps(..., ensure_ascii=False)` 로
 직렬화해 `_worker_outputs[0]["data"]["response"]` 에 넣습니다.
@@ -829,12 +814,6 @@ uv run python scripts/try_search_summary.py "ai"
 [자격] (link, 3건)
   ↳ 더 보기: https://www.work24.go.kr/...&topQuerySearchArea=qual&...
 
-🔍 연관검색어:
-  인공지능 개발, 머신러닝, 알고리즘 최적화, 자연어 처리, 컴퓨터 비전
-
-💼 연관직종:
-  - 연구 및 공학기술 > 데이터 및 정보시스템·웹 운영 > 데이터 분석가(빅데이터 분석가)
-  - 연구 및 공학기술 > 소프트웨어 > 응용 소프트웨어 개발자
 ```
 
 ### 방법 2 — Python 코드에서 직접 호출
@@ -855,9 +834,6 @@ async def main():
         print(card["category"], card["result_count"])
         print("  요약:", card["summary"])
         print("  최상위 결과:", card["top_result"])
-        print("  더 보기:", card["more_url"])
-    print(payload["related_queries"])
-    print(payload["related_jobs"])
     print(payload["meta"])                 # result_count_total / by_category / fetched_at
 
 asyncio.run(main())
@@ -987,7 +963,7 @@ _group_by_category(results)  → 카테고리별 dict
 ### 전략
 
 I/O 경계(LLM, HTTP)에서만 mock 하고, 순수 함수는 그대로 호출합니다. 실제 LLM 호출이나
-HTTP 호출 없이 34개 테스트가 모두 통과합니다.
+HTTP 호출 없이 30개 테스트가 모두 통과합니다.
 
 ```bash
 uv run pytest tests/test_ai_search_summary.py -v
@@ -997,16 +973,15 @@ uv run pytest tests/test_ai_search_summary.py -v
 
 | 분류 | 테스트 개수 | 검증 대상 |
 |---|---|---|
-| **HTML 파서** | 8 | fixture 파싱, 필수 필드, 카테고리 커버리지, URL 절대화, 연관직종 추출, edge case (빈/잘못된/잘린 입력) |
+| **HTML 파서** | 6 | fixture 파싱, 필수 필드, 카테고리 커버리지, URL 절대화, edge case (빈/잘못된/잘린 입력) |
 | **카테고리 그룹화** | 2 | `_group_by_category` 입력 순서 유지, 빈 카테고리 skip |
-| **more_url 빌더** | 3 | 한글 query 이중 인코딩, 카테고리별 area 코드 매핑, 알 수 없는 카테고리 처리 |
 | **카드 빌더** | 3 | summary 카드 모양, top_result 처리, 비-summary 카테고리 제외 검증 |
 | **모델 ID 해석** | 5 | LLM_MODEL 환경변수 검증 및 자동 prefix |
 | **count 환경변수 해석** | 5 | SEARCH_RESULT_COUNT / SUMMARY_INPUT_COUNT 검증 |
 | **summary fallback** | 3 | LLM 실패/빈 selection 처리, 카테고리 인지형 프롬프트 검증 |
 | **E2E** | 4 | 카드 고정 순서, 빈 카테고리 skip, 카테고리별 type 매핑, summary 카드 모양, 빈 query 처리 |
 
-총 **34건**, 회귀 0.
+총 **30건**, 회귀 0.
 
 ### 주의: 모듈 재노출 vs monkeypatch
 

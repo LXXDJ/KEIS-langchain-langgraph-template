@@ -38,17 +38,13 @@ def work24_html() -> str:
     return _WORK24_FIXTURE.read_text(encoding="utf-8")
 
 
-def test_parse_work24_html_returns_results_and_related(work24_html: str) -> None:
-    results, related, jobs = wss._parse_work24_html(work24_html)
+def test_parse_work24_html_returns_results(work24_html: str) -> None:
+    results = wss._parse_work24_html(work24_html)
     assert results, "fixture에서 결과가 하나도 파싱되지 않음"
-    assert related, "fixture에서 연관검색어가 파싱되지 않음"
-    assert len(related) <= 5
-    assert isinstance(jobs, list)
-    assert len(jobs) <= 2
 
 
 def test_parse_work24_html_results_have_required_fields(work24_html: str) -> None:
-    results, _, _ = wss._parse_work24_html(work24_html)
+    results = wss._parse_work24_html(work24_html)
     for r in results:
         assert set(r.keys()) >= {"title", "snippet", "url", "category", "meta"}
         assert isinstance(r["title"], str)
@@ -61,7 +57,7 @@ def test_parse_work24_html_results_have_required_fields(work24_html: str) -> Non
 
 
 def test_parse_work24_html_covers_multiple_categories(work24_html: str) -> None:
-    results, _, _ = wss._parse_work24_html(work24_html)
+    results = wss._parse_work24_html(work24_html)
     categories = {r["category"] for r in results}
     # 검색어 'ai'에 대해 적어도 채용/훈련/뉴스·자료는 항상 보여야 한다.
     expected_subset = {"채용", "훈련", "뉴스·자료"}
@@ -69,48 +65,32 @@ def test_parse_work24_html_covers_multiple_categories(work24_html: str) -> None:
 
 
 def test_parse_work24_html_absolutizes_relative_urls(work24_html: str) -> None:
-    results, _, _ = wss._parse_work24_html(work24_html)
+    results = wss._parse_work24_html(work24_html)
     urls_with_value = [r["url"] for r in results if r["url"]]
     assert urls_with_value, "URL을 가진 결과가 하나도 없음"
     for url in urls_with_value:
         assert url.startswith("http://") or url.startswith("https://"), url
 
 
-def test_parse_work24_html_extracts_related_jobs(work24_html: str) -> None:
-    """form_keyword2 에서 연관직종이 추출되는지 검증."""
-    _, _, jobs = wss._parse_work24_html(work24_html)
-    assert jobs, "fixture에서 연관직종이 파싱되지 않음"
-    assert len(jobs) <= 2
-    for j in jobs:
-        assert isinstance(j, str)
-        assert j.strip()
-
-
 def test_parse_work24_html_empty_input_returns_empty() -> None:
-    results, related, jobs = wss._parse_work24_html("")
+    results = wss._parse_work24_html("")
     assert results == []
-    assert related == []
-    assert jobs == []
 
 
 def test_parse_work24_html_garbage_input_returns_empty() -> None:
     """파싱 가능한 마크업이지만 work24 구조가 아니면 빈 결과."""
-    results, related, jobs = wss._parse_work24_html(
+    results = wss._parse_work24_html(
         "<html><body><p>not work24</p></body></html>"
     )
     assert results == []
-    assert related == []
-    assert jobs == []
 
 
 def test_parse_work24_html_truncated_input_does_not_raise() -> None:
     """잘린 HTML이어도 예외를 던지지 않아야 한다."""
     truncated = "<html><body><div class='stit_area'><span class='t2_sb'>채용</span"
     # 절대 raise하면 안 됨.
-    results, related, jobs = wss._parse_work24_html(truncated)
+    results = wss._parse_work24_html(truncated)
     assert isinstance(results, list)
-    assert isinstance(related, list)
-    assert isinstance(jobs, list)
 
 
 # ── 단위 테스트: _group_by_category ──────────────────────────────
@@ -137,38 +117,6 @@ def test_group_by_category_skips_blank_category() -> None:
     assert list(grouped.keys()) == ["정책"]
 
 
-# ── 단위 테스트: _build_more_url ─────────────────────────────────
-
-
-def test_build_more_url_double_encodes_korean_query() -> None:
-    """work24 의 topQueryData 는 이중 URL 인코딩이 필요하다."""
-    url = wss._build_more_url("신고·신청", "고용")
-    assert "topQuerySearchArea=report" in url
-    assert "topQueryData=%25EA%25B3%25A0%25EC%259A%25A9" in url
-    assert "sortField=rank" in url
-
-
-def test_build_more_url_uses_correct_area_code_per_category() -> None:
-    cases = {
-        "신고·신청": "report",
-        "정책": "policy",
-        "채용": "workinfo",
-        "기업": "bizinfo",
-        "훈련": "training",
-        "뉴스·자료": "news",
-        "직업·진로": "jobCourse",
-        "자격": "qual",
-        "기타": "etc",
-    }
-    for category, area in cases.items():
-        url = wss._build_more_url(category, "ai")
-        assert f"topQuerySearchArea={area}" in url, category
-
-
-def test_build_more_url_unknown_category_returns_empty() -> None:
-    assert wss._build_more_url("존재하지않음", "ai") == ""
-
-
 # ── 단위 테스트: 카드 빌더 ──────────────────────────────────────
 
 
@@ -177,7 +125,7 @@ def test_build_summary_card_shape() -> None:
         {"title": "샘플 채용 1", "url": "https://example.com/1"},
         {"title": "샘플 채용 2", "url": "https://example.com/2"},
     ]
-    card = wss._build_summary_card("채용", items, "테스트 요약 텍스트", "ai")
+    card = wss._build_summary_card("채용", items, "테스트 요약 텍스트")
     assert card["category"] == "채용"
     assert card["type"] == "summary"
     assert card["summary"] == "테스트 요약 텍스트"
@@ -186,11 +134,11 @@ def test_build_summary_card_shape() -> None:
         "url": "https://example.com/1",
     }
     assert card["result_count"] == 2
-    assert "topQuerySearchArea=workinfo" in card["more_url"]
+    assert "more_url" not in card
 
 
 def test_build_summary_card_top_result_none_when_empty_items() -> None:
-    card = wss._build_summary_card("채용", [], "요약", "ai")
+    card = wss._build_summary_card("채용", [], "요약")
     assert card["top_result"] is None
     assert card["result_count"] == 0
 
@@ -340,8 +288,8 @@ async def test_preset_e2e_returns_categories_in_fixed_order(
 
     async def fake_fetch(
         query: str, *, list_count: int = 20
-    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        return fake_results, [], []
+    ) -> list[dict[str, Any]]:
+        return fake_results
 
     async def fake_summarize(
         query: str, category: str, selected: list[dict[str, Any]]
@@ -375,8 +323,8 @@ async def test_preset_e2e_skips_empty_and_non_summary_categories(
 
     async def fake_fetch(
         query: str, *, list_count: int = 20
-    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        return fake_results, [], []
+    ) -> list[dict[str, Any]]:
+        return fake_results
 
     async def fake_summarize(
         query: str, category: str, selected: list[dict[str, Any]]
@@ -414,8 +362,8 @@ async def test_preset_e2e_only_includes_summary_categories(
 
     async def fake_fetch(
         query: str, *, list_count: int = 20
-    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        return fake_results, [], []
+    ) -> list[dict[str, Any]]:
+        return fake_results
 
     async def fake_summarize(
         query: str, category: str, selected: list[dict[str, Any]]
@@ -445,7 +393,7 @@ async def test_preset_e2e_only_includes_summary_categories(
 async def test_preset_e2e_summary_card_has_top_result_and_summary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """summary 카드에 LLM 요약, top_result, more_url 이 모두 들어가야 한다."""
+    """summary 카드에 LLM 요약, top_result 이 들어가야 한다."""
     fake_results = [
         _make_result("채용", 1),
         _make_result("채용", 2),
@@ -453,8 +401,8 @@ async def test_preset_e2e_summary_card_has_top_result_and_summary(
 
     async def fake_fetch(
         query: str, *, list_count: int = 20
-    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        return fake_results, ["연관1"], ["대분류 > 중분류 > 직종A"]
+    ) -> list[dict[str, Any]]:
+        return fake_results
 
     async def fake_summarize(
         query: str, category: str, selected: list[dict[str, Any]]
@@ -469,8 +417,6 @@ async def test_preset_e2e_summary_card_has_top_result_and_summary(
 
     payload = json.loads(result["messages"][-1].content)
     assert payload["query"] == "서울 카페"
-    assert payload["related_queries"] == ["연관1"]
-    assert payload["related_jobs"] == ["대분류 > 중분류 > 직종A"]
 
     [card] = payload["categories"]
     assert card["category"] == "채용"
@@ -481,7 +427,7 @@ async def test_preset_e2e_summary_card_has_top_result_and_summary(
         "url": "https://example.com/채용/1",
     }
     assert card["result_count"] == 2
-    assert "topQuerySearchArea=workinfo" in card["more_url"]
+    assert "more_url" not in card
 
     meta = payload["meta"]
     assert meta["result_count_total"] == 2
@@ -498,7 +444,7 @@ async def test_preset_e2e_handles_empty_query(
     # fetch 는 호출되지 않아야 하지만 안전하게 stub 해둔다.
     async def fake_fetch(
         query: str, *, list_count: int = 20
-    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+    ) -> list[dict[str, Any]]:
         raise AssertionError("빈 query 에서는 fetch 가 호출되면 안 된다")
 
     monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
@@ -516,8 +462,6 @@ async def test_preset_e2e_handles_empty_query(
     assert payload == {
         "query": "",
         "categories": [],
-        "related_queries": [],
-        "related_jobs": [],
         "meta": {
             "result_count_total": 0,
             "result_count_by_category": {},

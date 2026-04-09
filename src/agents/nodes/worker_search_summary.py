@@ -22,7 +22,6 @@ import datetime
 import json
 import logging
 import os
-import urllib.parse
 from functools import lru_cache
 from typing import Any
 
@@ -226,20 +225,6 @@ _SUMMARY_CATEGORIES: frozenset[str] = frozenset({
     "뉴스·자료",
     "직업·진로",
 })
-
-# 카테고리별 work24 통합검색 URL 의 ``topQuerySearchArea`` 파라미터 값.
-# more_url 생성에 사용한다.
-_CATEGORY_SEARCH_AREA: dict[str, str] = {
-    "신고·신청": "report",
-    "정책": "policy",
-    "채용": "workinfo",
-    "기업": "bizinfo",
-    "훈련": "training",
-    "뉴스·자료": "news",
-    "직업·진로": "jobCourse",
-    "자격": "qual",
-    "기타": "etc",
-}
 
 # 카테고리별 전용 시스템 프롬프트.
 # 공통 규칙은 _SUMMARY_RULES 로 분리하고, 카테고리별 강조점만 달리한다.
@@ -788,56 +773,23 @@ def _parse_report_section(section: Tag, category: str) -> list[dict[str, Any]]:
     return items
 
 
-def _parse_related_queries(soup: BeautifulSoup) -> list[str]:
-    """``form_keyword1`` 탭의 ``_btn_recommend`` 버튼에서 연관검색어를 추출합니다."""
-    container = soup.find("div", id="form_keyword1")
-    if not container or not isinstance(container, Tag):
-        return []
-    out: list[str] = []
-    for btn in container.find_all("button", attrs={"name": "_btn_recommend"}):
-        text = " ".join(btn.get_text(" ", strip=True).split())
-        if text and text not in out:
-            out.append(text)
-    return out[:5]
-
-
-def _parse_related_jobs(soup: BeautifulSoup) -> list[str]:
-    """``form_keyword2`` 탭의 ``_btn_jobsCategor`` 버튼에서 연관직종을 추출합니다.
-
-    work24의 연관직종은 보통 "대분류 > 중분류 > 소분류" 형식으로 노출되며,
-    현재 시스템 명세상 최대 2개까지 표시한다.
-    """
-    container = soup.find("div", id="form_keyword2")
-    if not container or not isinstance(container, Tag):
-        return []
-    out: list[str] = []
-    for btn in container.find_all("button", attrs={"name": "_btn_jobsCategor"}):
-        text = " ".join(btn.get_text(" ", strip=True).split())
-        if text and text not in out:
-            out.append(text)
-    return out[:2]
-
-
 def _parse_work24_html(
     html: str,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    """고용24 통합검색 결과 HTML을 정규화된 결과 + 연관검색어 + 연관직종으로 파싱합니다.
+) -> list[dict[str, Any]]:
+    """고용24 통합검색 결과 HTML을 정규화된 결과 리스트로 파싱합니다.
 
     Returns:
-        (results, related_queries, related_jobs)
-        results: ``{"title", "snippet", "url", "category", "meta"}`` dict의 리스트
-        related_queries: 연관검색어 문자열 리스트 (최대 5개)
-        related_jobs: 연관직종 문자열 리스트 (최대 2개)
+        results: ``{"title", "snippet", "url", "category", "meta"}`` dict 의 리스트
 
-    파싱 실패 시 빈 튜플 ``([], [], [])`` 을 반환합니다 (caller가 graceful degradation).
+    파싱 실패 시 빈 리스트 ``[]`` 를 반환합니다 (caller 가 graceful degradation).
     """
     if not html:
-        return [], [], []
+        return []
     try:
         soup = BeautifulSoup(html, "html.parser")
     except Exception:
         _log.exception("BeautifulSoup parsing failed")
-        return [], [], []
+        return []
 
     results: list[dict[str, Any]] = []
     for stit in soup.select("div.stit_area"):
@@ -878,9 +830,7 @@ def _parse_work24_html(
             if parsed is not None:
                 results.append(parsed)
 
-    related_queries = _parse_related_queries(soup)
-    related_jobs = _parse_related_jobs(soup)
-    return results, related_queries, related_jobs
+    return results
 
 
 # ── Fetcher (work24 통합검색 HTTP 호출) ──────────────────────────
@@ -890,24 +840,16 @@ async def fetch_work24_search(
     query: str,
     *,
     list_count: int = _DEFAULT_SEARCH_RESULT_COUNT,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-    """고용24 통합검색을 호출해 정규화된 결과 + 연관검색어 + 연관직종을 반환합니다.
+) -> list[dict[str, Any]]:
+    """고용24 통합검색을 호출해 정규화된 결과 리스트를 반환합니다.
 
     실패 시 빈 리스트 + 경고 로그 (요약 파이프라인이 멈추지 않게).
-
-    work24의 통합검색 페이지는 카테고리별로 별도의 정렬 옵션 파라미터를 받는다.
-    SVC-3 는 "결과 있는 카테고리만 카드화" 하므로 신고·신청 카테고리도 정확도순
-    (RANK) 으로 가져와야 top-N 이 의미를 가진다. (브라우저 기본은 가나다순(TITLE)
-    이지만, 그 정렬에서는 ㄱ/ㄴ/ㄷ 으로 시작하는 항목이 위로 와서 list 카드가
-    잘못된 신호를 준다.)
-    훈련(trainingSort=DATE) 만 의도적으로 날짜순을 유지하는데, 사용자에게 가치
-    있는 정보가 "최근 등록된/모집 임박" 이기 때문이다.
 
     NOTE: 공식 API가 아니라 공개 페이지의 HTML 스크래핑입니다.
     work24가 API를 제공하면 그쪽으로 교체하는 것을 권장합니다.
     """
     if not query:
-        return [], [], []
+        return []
 
     # work24 통합검색 페이지가 실제로 보내는 파라미터셋과 동일하게 구성.
     # 카테고리별 정렬 옵션을 명시해야 사용자가 브라우저에서 보는 결과와
@@ -948,10 +890,10 @@ async def fetch_work24_search(
             html = response.text
     except httpx.HTTPError:
         _log.exception("work24 fetch failed for query=%r", query)
-        return [], [], []
+        return []
     except Exception:
         _log.exception("unexpected error while fetching work24 query=%r", query)
-        return [], [], []
+        return []
 
     return _parse_work24_html(html)
 
@@ -972,35 +914,12 @@ def _group_by_category(
     return grouped
 
 
-def _build_more_url(category: str, query: str) -> str:
-    """카테고리별 work24 통합검색 결과 페이지의 deep link 를 생성합니다.
-
-    work24 의 ``selectUnifySearch.do`` URL 은 ``topQueryData`` 를 이중 URL
-    인코딩으로 받습니다 (예: '고용' → '%25EA%25B3%25A0%25EC%259A%25A9').
-    그래서 ``quote`` 를 두 번 호출합니다.
-    """
-    area = _CATEGORY_SEARCH_AREA.get(category, "")
-    if not area:
-        return ""
-    encoded_query = urllib.parse.quote(urllib.parse.quote(query, safe=""), safe="")
-    return (
-        f"{_WORK24_BASE}{_WORK24_SEARCH_PATH}"
-        f"?topQuerySearchArea={area}"
-        f"&topQueryData={encoded_query}"
-        f"&sortField=rank"
-    )
-
-
 def _build_summary_card(
     category: str,
     items: list[dict[str, Any]],
     summary_text: str,
-    query: str,
 ) -> dict[str, Any]:
-    """summary type 카드를 생성합니다.
-
-    LLM 요약 + 1 순위 결과의 title/url + more_url 을 묶어서 반환합니다.
-    """
+    """summary type 카드를 생성합니다."""
     top = items[0] if items else None
     return {
         "category": category,
@@ -1012,7 +931,6 @@ def _build_summary_card(
             else None
         ),
         "result_count": len(items),
-        "more_url": _build_more_url(category, query),
     }
 
 
@@ -1111,7 +1029,7 @@ async def _build_category_cards(
         for (idx, category, _), summary_text in zip(summary_inputs, summaries):
             full_items = by_category.get(category, [])
             cards[idx] = _build_summary_card(
-                category, full_items, summary_text, query
+                category, full_items, summary_text
             )
 
     return [c for c in cards if c is not None]
@@ -1139,8 +1057,6 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
         empty_payload = {
             "query": "",
             "categories": [],
-            "related_queries": [],
-            "related_jobs": [],
             "meta": {
                 "result_count_total": 0,
                 "result_count_by_category": {},
@@ -1161,17 +1077,13 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     search_result_count = _search_result_count()
     summary_input_count = _summary_input_count()
 
-    results, related_queries, related_jobs = await fetch_work24_search(
-        query, list_count=search_result_count
-    )
+    results = await fetch_work24_search(query, list_count=search_result_count)
     by_category = _group_by_category(results)
     cards = await _build_category_cards(query, by_category, summary_input_count)
 
     payload = {
         "query": query,
         "categories": cards,
-        "related_queries": related_queries[:5],
-        "related_jobs": related_jobs[:2],
         "meta": {
             "result_count_total": len(results),
             "result_count_by_category": {

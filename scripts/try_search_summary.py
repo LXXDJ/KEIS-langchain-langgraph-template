@@ -35,29 +35,15 @@ def _print_card(card: dict[str, Any]) -> None:
     count = card.get("result_count", 0)
     print(f"[{category}] ({ctype}, {count}건)")
 
-    if ctype == "summary":
-        summary = card.get("summary", "")
-        if summary:
-            print(f"  {summary}")
-        top = card.get("top_result")
-        if top:
-            print(f"  ↳ 최상위: {top.get('title', '')}")
-            url = top.get("url", "")
-            if url:
-                print(f"    {url}")
-    elif ctype == "list":
-        items = card.get("items", [])
-        for item in items:
-            title = item.get("title", "")
-            url = item.get("url", "")
-            print(f"  - {title}")
-            if url:
-                print(f"    {url}")
-    # link type 은 별도 출력 없음 (more_url 만 있음)
-
-    more_url = card.get("more_url", "")
-    if more_url:
-        print(f"  ↳ 더 보기: {more_url}")
+    summary = card.get("summary", "")
+    if summary:
+        print(f"  {summary}")
+    top = card.get("top_result")
+    if top:
+        print(f"  ↳ 최상위: {top.get('title', '')}")
+        url = top.get("url", "")
+        if url:
+            print(f"    {url}")
     print()
 
 
@@ -89,23 +75,6 @@ async def run(query: str) -> None:
     else:
         print("  (결과 있는 카테고리 없음)")
         print()
-
-    print("🔍 연관검색어:")
-    related_queries = payload.get("related_queries", [])
-    if related_queries:
-        print(f"  {', '.join(related_queries)}")
-    else:
-        print("  (없음)")
-    print()
-
-    print("💼 연관직종:")
-    related_jobs = payload.get("related_jobs", [])
-    if related_jobs:
-        for j in related_jobs:
-            print(f"  - {j}")
-    else:
-        print("  (없음)")
-    print()
 
     meta = payload.get("meta", {})
     total = meta.get("result_count_total", 0)
