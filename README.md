@@ -1,39 +1,34 @@
 # 고용24 AI 검색 결과 요약 (SVC-3)
 
----
+## 목차
 
-검색어: 고용
+### Part 1 — 기획
+- [배경과 목표](#배경과-목표)
+- [서비스가 하는 일](#서비스가-하는-일)
+- [요약 대상 카테고리와 제외 카테고리](#요약-대상-카테고리와-제외-카테고리)
+- [카테고리별 요약 방식](#카테고리별-요약-방식)
+- [실행 결과 예시](#실행-결과-예시)
+- [출력 스키마](#출력-스키마)
+- [모델 정책 — 왜 외부 LLM(GPT-4o mini)을 써도 되는가](#모델-정책--왜-외부-llmgpt-4o-mini을-써도-되는가)
+- [한계 및 제약사항](#한계-및-제약사항)
+- [SVC-1 과의 관계](#svc-1-과의-관계)
 
-📊 카테고리 카드 (5)
-
-[정책] (summary, 20건)
-  총 3개의 고용 관련 정책이 있습니다. 첫째, 장애인 신규 고용 장려금은 상시근로자 5인 이상 50인 미만 사업주가 장애인 근로자를 신규 고용하고 6개월 이상 고용 유지 시 지원됩니다. 둘째, 특별 고용 지원 업종 정책은 사업주나 단체가 신청 가능하며, 특정 업종에 대한 지원이 이루어집니다. 고용의 허가제도 또한 존재하지만 상세 내용이 제공되지 않았습니다.
-  ↳ 최상위: 고용 촉진장려금
-    https://www.work24.go.kr/cm/c/f/1100/selecSystInfo.do?currentPageNo=1&recordCountPerPage=10&systId=SI00000370&systClId=SC00000119
-  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=policy&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
-
-[채용] (summary, 20건)
-  총 5개의 채용 공고가 있습니다. 주요 직무는 기간제근로자(통계조사관)이며, 고용형태는 계약직과 정규직이 혼합되어 있습니다. 지역은 강원, 대전, 세종, 경북 등 다양하며, 마감 임박 건수는 1건(D-7 이내)입니다.
-  ↳ 최상위: 중부지방 고용 노동청 기간제근로자(통계조사관) 채용
-    https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=K152412604080023&infoTypeCd=VALIDATION&infoTypeGroup=tb_workinfoworknet
-  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=workinfo&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
-
-[훈련] (summary, 20건)
-  총 5개의 과정이 확인되었습니다. 이 중 2개 과정은 국비지원으로 자기부담금이 0이며, 나머지 3개는 유료 과정입니다. 주요 과정 분야는 외국인 고용과 직업상담사 관련이며, 평균적인 훈련기간은 약 52일입니다.
-  ↳ 최상위: 외국인의 고용 과 VISA 실무
-    https://www.work24.go.kr/hr/a/a/3100/selectTracseDetl.do?tracseId=ABA20253001133755&tracseTme=153&crseTracseSe=C0041&trainstCstmrId=500044312625
-  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=training&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
-
-[뉴스·자료] (summary, 18건)
-  총 6개의 자료가 검색되었습니다. 주요 주제는 AI 고용 서비스와 일·가정 양립 지원입니다. 가장 최근 자료는 2026년 1월 9일에 발행된 이벤트로, 고용24에서 이력서를 갱신하면 2026년 탁상 달력을 선착순으로 제공하는 내용입니다.
-  ↳ 최상위: 고용 AI 4종 공개…좋은 질문하면 기프티콘이 쏟아진다!
-    https://www.work24.go.kr/cm/c/b/0130/selectBbttInfo.do?ntceStno=49&bbsClCd=%2BWhIYyX4MTPwl6gr4E19tQ%3D%3D
-  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=news&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
-
-[직업·진로] (summary, 20건)
-  총 5개의 자료가 있습니다. 주요 직업/진로 관련 주제는 '고용 변동 요인 분석'과 '고용 안정성'입니다. 가장 관련성 높은 자료는 '직종별 고용 변동 요인 분석'으로, 다양한 직종(보건의료, 디자인, 건설 등)의 고용 변동 요인을 다루고 있습니다.
-  ↳ 최상위: 직종별 고용 변동 요인 분석
-  ↳ 더 보기: https://www.work24.go.kr/cm/f/c/0100/selectUnifySearch.do?topQuerySearchArea=jobCourse&topQueryData=%25EA%25B3%25A0%25EC%259A%25A9&sortField=rank
+### Part 2 — 개발
+- [빠른 시작](#빠른-시작)
+- [폴더 구조](#폴더-구조)
+- [아키텍처](#아키텍처)
+- [각 노드 상세](#각-노드-상세)
+- [State 정의](#state-정의--srcagentsstatepy)
+- [graph_builder](#graph_builder--srcagentsgraph_builderpy)
+- [서빙 레이어](#서빙-레이어--app)
+- [사용 방법](#사용-방법)
+- [환경변수](#환경변수)
+- [안정성 — 모든 실패 지점에 fallback](#안정성--모든-실패-지점에-fallback)
+- [테스트](#테스트--teststest_ai_search_summarypy)
+- [의존성](#의존성--pyprojecttoml)
+- [다음에 누가 이 코드를 확장한다면](#다음에-누가-이-코드를-확장한다면)
+- [main 템플릿 정렬 작업](#main-템플릿-정렬-작업)
+- [참고 문서](#참고-문서)
 
 ---
 
@@ -108,6 +103,62 @@
 정확도순(RANK) 으로 정렬되므로 검색어와 가장 관련도가 높은 결과입니다.
 (훈련 카테고리만 날짜순(DATE) 정렬 — 사용자에게 가치 있는 정보가 "지금 신청 가능한
 최신 과정" 이기 때문)
+
+## 실행 결과 예시
+
+"고용" 검색 (2026-04-10 기준):
+
+```
+검색어: 고용
+============================================================
+
+📊 카테고리 카드 (5)
+
+[정책] (summary, 20건)
+  고용 관련 정책은 총 3가지를 소개합니다. 장애인 신규 고용 장려금은
+  상시근로자 5인 이상 50인 미만 사업주가 신규 장애인 근로자를 6개월 이상
+  고용할 경우 지원됩니다. 특별 고용 지원 업종 지정은 사업주 및 단체가
+  신청할 수 있으며, 해당 업종에 대한 지원을 받을 수 있도록 합니다.
+  ↳ 최상위: 고용 촉진장려금
+    https://www.work24.go.kr/cm/c/f/1100/selecSystInfo.do?...
+
+[채용] (summary, 20건)
+  채용 건수는 5건으로, 주로 계약직의 통계조사관 모집이 포함되어 있습니다.
+  지역은 강원, 대전, 세종, 대구 등으로 다양합니다.
+  마감 임박 건수는 3건(D-7 이내)입니다.
+  ↳ 최상위: 중부지방 고용 노동청 기간제근로자(통계조사관) 채용
+    https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?...
+
+[훈련] (summary, 20건)
+  총 5개의 교육 과정이 포함되어 있습니다. 이 중 4개 과정은 국비지원으로
+  자기부담금이 0이고, 1개 과정은 유료로 자기부담금이 존재합니다.
+  주요 과정 분야는 외국인의 고용, 직업상담사, 간호조무사 자격 취득입니다.
+  평균적인 훈련 기간은 약 418일입니다.
+  ↳ 최상위: 외국인의 고용 과 VISA 실무
+    https://www.work24.go.kr/hr/a/a/3100/selectTracseDetl.do?...
+
+[뉴스·자료] (summary, 18건)
+  총 6개의 자료가 검색되었습니다. 주요 주제는 AI 고용 서비스와
+  워킹맘&대디 멘토단 모집입니다. 가장 최근 자료는 고용노동부에서
+  2025년 12월 8일에 발표한 워킹맘&대디 멘토단 공개 모집으로,
+  육아기 자녀를 둔 근로자들이 정책 의견을 수렴할 기회를 제공합니다.
+  ↳ 최상위: 고용 AI 4종 공개…좋은 질문하면 기프티콘이 쏟아진다!
+    https://www.work24.go.kr/cm/c/b/0130/selectBbttInfo.do?...
+
+[직업·진로] (summary, 20건)
+  총 5개의 자료가 검색되었습니다. 주요 직업/진로 관련 주제로는
+  고용 변동 요인 분석과 고용 안정성이 있습니다. 가장 관련성 높은
+  자료에서는 다양한 직종의 고용 변동 요인을 분석하며, 특히 보건의료,
+  디자인, 건설, 기계 및 정보통신 직종에 대한 고용 전망이 다루어졌습니다.
+  ↳ 최상위: 직종별 고용 변동 요인 분석
+    https://www.wagework.go.kr/pt/z/a/retrieveBoardDtal.do?...
+
+ℹ️  전체 결과 수: 178건
+   카테고리별: 신고·신청=20, 정책=20, 채용=20, 기업=20, 훈련=20,
+              뉴스·자료=18, 직업·진로=20, 자격=20, 기타=20
+```
+
+> 실제 값은 시점·검색어에 따라 달라집니다.
 
 ## 출력 스키마
 
@@ -783,37 +834,7 @@ if __name__ == "__main__":
 ```bash
 uv run python scripts/try_search_summary.py "AI 직업훈련"
 uv run python scripts/try_search_summary.py "청년 취업 지원금"
-uv run python scripts/try_search_summary.py "ai"
-```
-
-출력 예 (실제 값은 시점·검색어에 따라 달라집니다):
-
-```
-검색어: AI 직업훈련
-============================================================
-
-📊 카테고리 카드 (4)
-
-[정책] (summary, 4건)
-  AI 인재 양성을 위한 청년 정책 4건이 등록돼 있으며, 주로 ...
-  ↳ 최상위: 청년 디지털 일자리 사업
-    https://www.work24.go.kr/...
-  ↳ 더 보기: https://www.work24.go.kr/...&topQuerySearchArea=policy&...
-
-[채용] (summary, 12건)
-  AI 관련 채용공고 12건. 머신러닝 엔지니어 / 데이터 사이언티스트 위주 ...
-  ↳ 최상위: ㈜AI테크 백엔드 개발자 채용
-    https://www.work24.go.kr/...
-  ↳ 더 보기: https://www.work24.go.kr/...&topQuerySearchArea=workinfo&...
-
-[훈련] (summary, 7건)
-  AI 직업훈련 과정 7개. 국비지원 5개, 유료 2개, 6개월 과정 위주 ...
-  ↳ 최상위: AI 융합 백엔드 개발자 과정
-    https://www.work24.go.kr/...
-
-[자격] (link, 3건)
-  ↳ 더 보기: https://www.work24.go.kr/...&topQuerySearchArea=qual&...
-
+uv run python scripts/try_search_summary.py "고용"
 ```
 
 ### 방법 2 — Python 코드에서 직접 호출
