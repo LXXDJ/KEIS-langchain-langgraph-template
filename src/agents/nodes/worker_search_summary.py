@@ -270,6 +270,31 @@ _CATEGORY_PROMPTS: dict[str, str] = {
         "(c) 주요 과정 분야, (d) 평균적인 훈련기간. "
         + _SUMMARY_RULES
     ),
+    "정책": (
+        "당신은 고용24 정책 요약 어시스턴트입니다. "
+        "검색 결과 JSON 의 meta.description 필드에 각 정책의 지원대상과 신청방법이 "
+        "포함되어 있습니다. "
+        "요약에 반드시 포함할 것: (a) 정책 건수, (b) 주요 대상자 그룹 "
+        "(예: 장애인/고령자/청년/사업주 등), (c) 핵심 지원 내용 1~2개. "
+        "단순 정책명 나열이 아니라 '누가, 무엇을 지원받을 수 있는지' 를 중심으로 요약하세요. "
+        + _SUMMARY_RULES
+    ),
+    "뉴스·자료": (
+        "당신은 고용24 뉴스·자료 요약 어시스턴트입니다. "
+        "검색 결과 JSON 의 meta 필드에 발행일(published_date), 출처(source), "
+        "본문발췌(excerpt), 주제어(tags) 정보가 포함되어 있습니다. "
+        "요약에 반드시 포함할 것: (a) 자료 수, (b) 주요 주제 1~2개, "
+        "(c) 가장 최근 자료의 핵심 내용. "
+        + _SUMMARY_RULES
+    ),
+    "직업·진로": (
+        "당신은 고용24 직업·진로 요약 어시스턴트입니다. "
+        "검색 결과 JSON 의 meta 필드에 발행일(published_date), 출처(source), "
+        "본문발췌(excerpt), 주제어(tags) 정보가 포함되어 있습니다. "
+        "요약에 반드시 포함할 것: (a) 자료 수, (b) 주요 직업/진로 관련 주제 1~2개, "
+        "(c) 가장 관련성 높은 자료의 핵심 내용. "
+        + _SUMMARY_RULES
+    ),
 }
 
 
@@ -579,6 +604,133 @@ def _parse_training_li(li: Tag) -> dict[str, Any] | None:
     }
 
 
+def _parse_policy_li(li: Tag) -> dict[str, Any] | None:
+    """정책 카테고리 전용 파서.
+
+    정책 li 에서 추출하는 필드:
+    - title: dt 텍스트 (정책명)
+    - description: div.flex_box 의 텍스트 (지원대상/신청방법 등 풍부한 설명)
+    """
+    dl = li.find("dl", class_="dl_list")
+    if not dl:
+        return None
+    dt = dl.find("dt")
+    if not dt:
+        return None
+
+    # 정책명 — dt 의 첫 번째 a 가 곧 정책명 링크.
+    # (정책 dt 에는 직접 텍스트가 없고 a 태그 자체가 제목)
+    dt_a = dt.find("a")
+    url = ""
+    if dt_a and _is_meaningful_href(dt_a.get("href", "")):
+        url = _absolutize(dt_a["href"])
+    title = " ".join(dt_a.get_text(" ", strip=True).split()) if dt_a else ""
+    if not title:
+        title = " ".join(dt.get_text(" ", strip=True).split())
+
+    # 지원대상/신청방법 설명 (div.flex_box 또는 div.item2repet)
+    description = ""
+    for div in li.select("div.flex_box, div.item2repet"):
+        text = " ".join(div.get_text(" ", strip=True).split())
+        if text and len(text) > len(description):
+            description = text
+
+    if not url and not title:
+        return None
+
+    return {
+        "title": title,
+        "snippet": description[:300] if description else "",
+        "url": url,
+        "category": "정책",
+        "meta": {
+            "description": description,
+        },
+    }
+
+
+def _parse_news_li(li: Tag, category: str) -> dict[str, Any] | None:
+    """뉴스·자료 / 직업·진로 카테고리 전용 파서.
+
+    두 카테고리는 HTML 구조가 동일합니다:
+    - dt: 제목 + 등록일 (등록일:2025-09-09)
+    - dd: 본문 발췌 (풍부)
+    - vline_group: 출처, 주제어
+    """
+    dl = li.find("dl", class_="dl_list")
+    if not dl:
+        return None
+    dt = dl.find("dt")
+    dd = dl.find("dd")
+    if not dt:
+        return None
+
+    # 제목 + URL — dt 에 a 태그가 2개: 첫 번째(btn_txt)가 실제 제목,
+    # 두 번째(btn_link)가 "사이트 가기". 첫 번째에서 제목과 URL 을 추출.
+    all_a = dt.find_all("a")
+    title_a = None
+    for a in all_a:
+        cls = a.get("class", [])
+        text = a.get_text(" ", strip=True)
+        # "사이트 가기" / "바로가기" 는 건너뜀
+        if "btn_link" in cls or "사이트" in text or "바로가기" in text:
+            continue
+        title_a = a
+        break
+    if not title_a and all_a:
+        title_a = all_a[0]
+
+    url = ""
+    if title_a and _is_meaningful_href(title_a.get("href", "")):
+        url = _absolutize(title_a["href"])
+    title = " ".join(title_a.get_text(" ", strip=True).split()) if title_a else ""
+
+    # 등록일 추출 — dt 전체 텍스트에서 (등록일:2025-09-09) 또는 (등록일2025.02.24)
+    import re
+    full_dt = " ".join(dt.get_text(" ", strip=True).split())
+    published_date = ""
+    date_match = re.search(r"\(등록일[:\s]*([\d.\-]+)\)", full_dt)
+    if date_match:
+        published_date = date_match.group(1)
+    # 제목에서 등록일 괄호 제거
+    date_in_title = re.search(r"\(등록일[:\s]*[\d.\-]+\)", title)
+    if date_in_title:
+        title = title[:date_in_title.start()].strip()
+
+    # 본문 발췌
+    excerpt = ""
+    if dd:
+        excerpt = " ".join(dd.get_text(" ", strip=True).split())
+
+    # vline_group: 출처, 주제어
+    source = ""
+    tags = ""
+    for span in li.select("div.vline_group span.item"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if not text:
+            continue
+        if "출처" in text or ":" in text and not tags:
+            source = text.replace("출처 :", "").replace("출처:", "").strip()
+        elif "주제어" in text or "," in text:
+            tags = text.replace("주제어 :", "").replace("주제어:", "").strip()
+
+    if not url and not title:
+        return None
+
+    return {
+        "title": title,
+        "snippet": excerpt[:300] if excerpt else "",
+        "url": url,
+        "category": category,
+        "meta": {
+            "published_date": published_date,
+            "source": source,
+            "excerpt": excerpt,
+            "tags": tags,
+        },
+    }
+
+
 def _parse_li(li: Tag, category: str) -> dict[str, Any] | None:
     """``<li>`` 하나를 정규화된 결과 dict로 변환합니다.
 
@@ -717,6 +869,10 @@ def _parse_work24_html(
                 parsed = _parse_recruit_li(li)
             elif category == "훈련":
                 parsed = _parse_training_li(li)
+            elif category == "정책":
+                parsed = _parse_policy_li(li)
+            elif category in ("뉴스·자료", "직업·진로"):
+                parsed = _parse_news_li(li, category)
             else:
                 parsed = _parse_li(li, category)
             if parsed is not None:
