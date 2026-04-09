@@ -321,6 +321,20 @@ def _absolutize(href: str) -> str:
     return href
 
 
+def _extract_onclick_url(element: Tag) -> str:
+    """``onclick`` 속성에서 URL 을 추출합니다.
+
+    work24 의 일부 카테고리(직업·진로 등)는 href 가 ``#none`` 이고 실제 URL 이
+    ``onclick="ComLib.goSsoLink('WK','https://...')"`` 안에 숨어 있습니다.
+    """
+    import re
+    onclick = element.get("onclick", "")
+    if not onclick:
+        return ""
+    match = re.search(r"https?://[^\s'\"]+", onclick)
+    return match.group(0) if match else ""
+
+
 def _extract_li_url(li: Tag) -> str:
     """``<li>`` 안에서 의미있는 첫 URL을 찾아 반환합니다."""
     for a in li.find_all("a", href=True):
@@ -666,8 +680,13 @@ def _parse_news_li(li: Tag, category: str) -> dict[str, Any] | None:
         title_a = all_a[0]
 
     url = ""
-    if title_a and _is_meaningful_href(title_a.get("href", "")):
-        url = _absolutize(title_a["href"])
+    if title_a:
+        href = title_a.get("href", "")
+        if _is_meaningful_href(href):
+            url = _absolutize(href)
+        else:
+            # href 가 #none 등인 경우 onclick 에서 URL 추출 시도
+            url = _extract_onclick_url(title_a)
     title = " ".join(title_a.get_text(" ", strip=True).split()) if title_a else ""
 
     # 등록일 추출 — dt 전체 텍스트에서 (등록일:2025-09-09) 또는 (등록일2025.02.24)
