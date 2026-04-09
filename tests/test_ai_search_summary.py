@@ -113,99 +113,93 @@ def test_parse_work24_html_truncated_input_does_not_raise() -> None:
     assert isinstance(jobs, list)
 
 
-# ── 단위 테스트: _select_top_k_by_category ───────────────────────
+# ── 단위 테스트: _group_by_category ──────────────────────────────
 
 
-def test_select_top_k_orders_by_ranking() -> None:
+def test_group_by_category_preserves_input_order() -> None:
     results = [
-        {"category": "기타", "title": "기타1"},
-        {"category": "채용", "title": "채용1"},
-        {"category": "정책", "title": "정책1"},
-        {"category": "채용", "title": "채용2"},
+        {"category": "채용", "title": "r1"},
+        {"category": "정책", "title": "p1"},
+        {"category": "채용", "title": "r2"},
     ]
-    ranking = ["채용", "정책", "기타"]
-    selected = wss._select_top_k_by_category(results, ranking, k=10)
-    assert [r["title"] for r in selected] == ["채용1", "채용2", "정책1", "기타1"]
+    grouped = wss._group_by_category(results)
+    assert list(grouped["채용"][0].values()) == ["채용", "r1"] or grouped["채용"][0]["title"] == "r1"
+    assert [it["title"] for it in grouped["채용"]] == ["r1", "r2"]
+    assert [it["title"] for it in grouped["정책"]] == ["p1"]
 
 
-def test_select_top_k_truncates_to_k() -> None:
-    results = [{"category": "정책", "title": f"p{i}"} for i in range(10)]
-    ranking = ["정책"]
-    selected = wss._select_top_k_by_category(results, ranking, k=3)
-    assert len(selected) == 3
-
-
-def test_select_top_k_unknown_category_goes_last() -> None:
+def test_group_by_category_skips_blank_category() -> None:
     results = [
-        {"category": "전혀모름", "title": "x"},
+        {"category": "", "title": "x"},
         {"category": "정책", "title": "p"},
     ]
-    selected = wss._select_top_k_by_category(results, ["정책"], k=10)
-    assert [r["title"] for r in selected] == ["p", "x"]
+    grouped = wss._group_by_category(results)
+    assert list(grouped.keys()) == ["정책"]
 
 
-# ── 단위 테스트: _build_navigation ───────────────────────────────
+# ── 단위 테스트: _build_more_url ─────────────────────────────────
 
 
-def test_build_navigation_picks_primary_and_related() -> None:
-    results = [
-        {"category": "채용", "url": "u-recruit", "title": "t-recruit"},
-        {"category": "정책", "url": "u-policy", "title": "t-policy"},
-        {"category": "훈련", "url": "u-train", "title": "t-train"},
-    ]
-    ranking = ["채용", "정책", "훈련"]
-    nav = wss._build_navigation(
-        results,
-        ranking,
-        related_queries=["q1", "q2"],
-        related_jobs=["대분류 > 직종A"],
-    )
+def test_build_more_url_double_encodes_korean_query() -> None:
+    """work24 의 topQueryData 는 이중 URL 인코딩이 필요하다."""
+    url = wss._build_more_url("신고·신청", "고용")
+    assert "topQuerySearchArea=report" in url
+    assert "topQueryData=%25EA%25B3%25A0%25EC%259A%25A9" in url
+    assert "sortField=rank" in url
 
-    assert nav["primary"] == {
-        "category": "채용",
-        "url": "u-recruit",
-        "title": "t-recruit",
+
+def test_build_more_url_uses_correct_area_code_per_category() -> None:
+    cases = {
+        "신고·신청": "report",
+        "정책": "policy",
+        "채용": "workinfo",
+        "기업": "bizinfo",
+        "훈련": "training",
+        "뉴스·자료": "news",
+        "직업·진로": "jobCourse",
+        "자격": "qual",
+        "기타": "etc",
     }
-    assert nav["related_categories"] == [
-        {"category": "정책", "url": "u-policy", "title": "t-policy"},
-        {"category": "훈련", "url": "u-train", "title": "t-train"},
+    for category, area in cases.items():
+        url = wss._build_more_url(category, "ai")
+        assert f"topQuerySearchArea={area}" in url, category
+
+
+def test_build_more_url_unknown_category_returns_empty() -> None:
+    assert wss._build_more_url("존재하지않음", "ai") == ""
+
+
+# ── 단위 테스트: 카드 빌더 ──────────────────────────────────────
+
+
+def test_build_summary_card_shape() -> None:
+    items = [
+        {"title": "샘플 채용 1", "url": "https://example.com/1"},
+        {"title": "샘플 채용 2", "url": "https://example.com/2"},
     ]
-    assert nav["related_queries"] == ["q1", "q2"]
-    assert nav["related_jobs"] == ["대분류 > 직종A"]
+    card = wss._build_summary_card("채용", items, "테스트 요약 텍스트", "ai")
+    assert card["category"] == "채용"
+    assert card["type"] == "summary"
+    assert card["summary"] == "테스트 요약 텍스트"
+    assert card["top_result"] == {
+        "title": "샘플 채용 1",
+        "url": "https://example.com/1",
+    }
+    assert card["result_count"] == 2
+    assert "topQuerySearchArea=workinfo" in card["more_url"]
 
 
-def test_build_navigation_handles_missing_categories() -> None:
-    results = [{"category": "정책", "url": "u", "title": "t"}]
-    ranking = ["채용", "정책", "훈련"]
-    nav = wss._build_navigation(
-        results, ranking, related_queries=[], related_jobs=[]
-    )
-    # 1순위(채용) 결과 없음 → primary 는 빈 카드 dict
-    assert nav["primary"] == {"category": "", "url": "", "title": ""}
-    # 2순위(정책)는 있음, 3순위(훈련)는 없음
-    assert len(nav["related_categories"]) == 1
-    assert nav["related_categories"][0]["category"] == "정책"
-    assert nav["related_jobs"] == []
+def test_build_summary_card_top_result_none_when_empty_items() -> None:
+    card = wss._build_summary_card("채용", [], "요약", "ai")
+    assert card["top_result"] is None
+    assert card["result_count"] == 0
 
 
-def test_build_navigation_caps_related_queries_at_5() -> None:
-    nav = wss._build_navigation(
-        results=[],
-        ranking=[],
-        related_queries=["a", "b", "c", "d", "e", "f", "g"],
-        related_jobs=[],
-    )
-    assert nav["related_queries"] == ["a", "b", "c", "d", "e"]
-
-
-def test_build_navigation_caps_related_jobs_at_2() -> None:
-    nav = wss._build_navigation(
-        results=[],
-        ranking=[],
-        related_queries=[],
-        related_jobs=["job1", "job2", "job3", "job4"],
-    )
-    assert nav["related_jobs"] == ["job1", "job2"]
+def test_non_summary_categories_excluded_from_cards() -> None:
+    """_SUMMARY_CATEGORIES 에 포함되지 않은 카테고리는 카드가 만들어지지 않아야 한다."""
+    non_summary = {"신고·신청", "기업", "자격", "기타"}
+    for cat in non_summary:
+        assert cat not in wss._SUMMARY_CATEGORIES, f"{cat} should not be in _SUMMARY_CATEGORIES"
 
 
 # ── 단위 테스트: _resolve_model_id ───────────────────────────────
@@ -277,118 +271,221 @@ def test_resolve_positive_int_rejects_above_max() -> None:
         wss._resolve_positive_int("SEARCH_RESULT_COUNT", 20, raw="9999")
 
 
-# ── 단위 테스트: _classify_intent fallback ───────────────────────
+# ── 단위 테스트: _summarize_for_category fallback ────────────────
 
 
-async def test_classify_intent_fallback_on_failure(
+async def test_summarize_for_category_fallback_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """LLM 호출이 실패하면 기본 ranking을 반환해야 한다."""
+    """LLM 호출이 실패하면 top-1 결과의 title 을 반환해야 한다."""
 
     def _boom(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("simulated llm failure")
 
     monkeypatch.setattr(wss, "init_chat_model", _boom)
-    ranking = await wss._classify_intent("아무 검색어")
-    assert ranking == wss._DEFAULT_CATEGORY_RANKING
-
-
-# ── 단위 테스트: _summarize fallback ─────────────────────────────
-
-
-async def test_summarize_fallback_on_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def _boom(*_args: Any, **_kwargs: Any) -> Any:
-        raise RuntimeError("simulated llm failure")
-
-    monkeypatch.setattr(wss, "init_chat_model", _boom)
-    out = await wss._summarize("q", [{"title": "fallback제목"}])
+    out = await wss._summarize_for_category("q", "채용", [{"title": "fallback제목"}])
     assert out == "fallback제목"
 
 
-async def test_summarize_fallback_on_empty_selection(
+async def test_summarize_for_category_fallback_on_empty_selection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def _boom(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError("simulated llm failure")
 
     monkeypatch.setattr(wss, "init_chat_model", _boom)
-    out = await wss._summarize("q", [])
+    out = await wss._summarize_for_category("q", "채용", [])
     assert out == ""
+
+
+def test_summary_system_prompt_includes_category_name() -> None:
+    """카테고리 인지형 프롬프트가 카테고리 이름을 실제로 주입하는지 검증."""
+    prompt_recruit = wss._summary_system_prompt("채용")
+    prompt_policy = wss._summary_system_prompt("정책")
+    assert "채용" in prompt_recruit
+    assert "정책" in prompt_policy
+    # 두 프롬프트는 카테고리 이름 외에는 같은 템플릿이어야 한다
+    assert prompt_recruit != prompt_policy
 
 
 # ── E2E: preset 통합 (LLM/HTTP 모두 mock) ────────────────────────
 
 
-async def test_preset_e2e_returns_json_ai_message(
+def _make_result(category: str, idx: int) -> dict[str, Any]:
+    """E2E 테스트용 가짜 결과 항목 헬퍼."""
+    return {
+        "title": f"{category}-{idx}",
+        "snippet": "",
+        "url": f"https://example.com/{category}/{idx}",
+        "category": category,
+        "meta": {},
+    }
+
+
+async def test_preset_e2e_returns_categories_in_fixed_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """summary 카드는 _CATEGORY_DISPLAY_ORDER 의 고정 순서로 노출되어야 한다.
+
+    fake_results 입력 순서를 일부러 뒤섞어도, 응답의 categories 배열은
+    UI 탭 순서를 따른다. 비-summary 카테고리(신고·신청 등)는 제외된다.
+    """
     fake_results = [
-        {
-            "title": "샘플 채용",
-            "snippet": "...",
-            "url": "https://example.com/recruit",
-            "category": "채용",
-            "meta": {},
-        },
-        {
-            "title": "샘플 정책",
-            "snippet": "...",
-            "url": "https://example.com/policy",
-            "category": "정책",
-            "meta": {},
-        },
+        _make_result("훈련", 1),       # summary, display order index 4
+        _make_result("신고·신청", 1),   # non-summary → 카드에서 제외
+        _make_result("채용", 1),       # summary, display order index 2
+        _make_result("정책", 1),       # summary, display order index 1
+        _make_result("기업", 1),       # non-summary → 카드에서 제외
     ]
-    fake_related = ["연관1", "연관2"]
-    fake_jobs = ["대분류 > 중분류 > 데이터 분석가"]
 
     async def fake_fetch(
         query: str, *, list_count: int = 20
     ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        return fake_results, fake_related, fake_jobs
+        return fake_results, [], []
 
-    async def fake_classify(query: str) -> list[str]:
-        return ["채용", "정책", "훈련"]
-
-    async def fake_summarize(query: str, selected: list[dict[str, Any]]) -> str:
-        return "테스트 요약입니다. 두 줄짜리 짧은 한국어 요약."
+    async def fake_summarize(
+        query: str, category: str, selected: list[dict[str, Any]]
+    ) -> str:
+        return f"[{category}] 요약"
 
     monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
-    monkeypatch.setattr(wss, "_classify_intent", fake_classify)
-    monkeypatch.setattr(wss, "_summarize", fake_summarize)
+    monkeypatch.setattr(wss, "_summarize_for_category", fake_summarize)
 
     graph = build_ai_search_summary()
-    result = await graph.ainvoke(
-        {"messages": [HumanMessage(content="서울 카페 아르바이트")]}
-    )
+    result = await graph.ainvoke({"messages": [HumanMessage(content="ai")]})
 
-    messages = result["messages"]
-    assert messages, "그래프가 messages를 반환해야 합니다"
-    last = messages[-1]
-    assert isinstance(last, AIMessage)
+    payload = json.loads(result["messages"][-1].content)
+    categories = [c["category"] for c in payload["categories"]]
+    # summary 카테고리만 고정 순서로: 정책 → 채용 → 훈련
+    assert categories == ["정책", "채용", "훈련"]
+    # 비-summary 카테고리는 meta 에서만 건수 확인
+    assert payload["meta"]["result_count_by_category"]["신고·신청"] == 1
+    assert payload["meta"]["result_count_by_category"]["기업"] == 1
 
-    payload = json.loads(last.content)
-    assert payload["query"] == "서울 카페 아르바이트"
-    assert payload["summary"].startswith("테스트 요약")
-    assert payload["primary"] == {
-        "category": "채용",
-        "url": "https://example.com/recruit",
-        "title": "샘플 채용",
-    }
-    assert payload["related_categories"] == [
-        {
-            "category": "정책",
-            "url": "https://example.com/policy",
-            "title": "샘플 정책",
-        }
+
+async def test_preset_e2e_skips_empty_and_non_summary_categories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """결과 0건 카테고리와 비-summary 카테고리는 카드에서 제외."""
+    fake_results = [
+        _make_result("채용", 1),     # summary
+        _make_result("훈련", 1),     # summary
+        _make_result("자격", 1),     # non-summary → 제외
     ]
-    assert payload["related_queries"] == ["연관1", "연관2"]
-    assert payload["related_jobs"] == ["대분류 > 중분류 > 데이터 분석가"]
-    # meta: 결정론적 필드(ranking, result_count)는 정확히 비교, 시각은 형태만 검증
+
+    async def fake_fetch(
+        query: str, *, list_count: int = 20
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        return fake_results, [], []
+
+    async def fake_summarize(
+        query: str, category: str, selected: list[dict[str, Any]]
+    ) -> str:
+        return "요약"
+
+    monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
+    monkeypatch.setattr(wss, "_summarize_for_category", fake_summarize)
+
+    graph = build_ai_search_summary()
+    result = await graph.ainvoke({"messages": [HumanMessage(content="ai")]})
+
+    payload = json.loads(result["messages"][-1].content)
+    categories = [c["category"] for c in payload["categories"]]
+    assert categories == ["채용", "훈련"]  # summary 만, 자격 제외
+    # 모든 카테고리 건수는 meta 에서 그대로 노출
+    assert payload["meta"]["result_count_by_category"] == {"채용": 1, "훈련": 1, "자격": 1}
+
+
+async def test_preset_e2e_only_includes_summary_categories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """9 카테고리 모두 결과가 있어도 summary 카테고리만 카드에 포함된다."""
+    fake_results = [
+        _make_result("신고·신청", 1),
+        _make_result("정책", 1),
+        _make_result("채용", 1),
+        _make_result("기업", 1),
+        _make_result("훈련", 1),
+        _make_result("뉴스·자료", 1),
+        _make_result("직업·진로", 1),
+        _make_result("자격", 1),
+        _make_result("기타", 1),
+    ]
+
+    async def fake_fetch(
+        query: str, *, list_count: int = 20
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        return fake_results, [], []
+
+    async def fake_summarize(
+        query: str, category: str, selected: list[dict[str, Any]]
+    ) -> str:
+        return f"[{category}] 요약"
+
+    monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
+    monkeypatch.setattr(wss, "_summarize_for_category", fake_summarize)
+
+    graph = build_ai_search_summary()
+    result = await graph.ainvoke({"messages": [HumanMessage(content="ai")]})
+
+    payload = json.loads(result["messages"][-1].content)
+    card_categories = {c["category"] for c in payload["categories"]}
+    # summary 카테고리만 카드에 포함
+    assert card_categories == {"정책", "채용", "훈련", "뉴스·자료", "직업·진로"}
+    # 모든 카드의 type 은 summary
+    for card in payload["categories"]:
+        assert card["type"] == "summary"
+    # 비-summary 카테고리도 meta 건수에는 포함
+    assert "신고·신청" in payload["meta"]["result_count_by_category"]
+    assert "기업" in payload["meta"]["result_count_by_category"]
+    assert "자격" in payload["meta"]["result_count_by_category"]
+    assert "기타" in payload["meta"]["result_count_by_category"]
+
+
+async def test_preset_e2e_summary_card_has_top_result_and_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """summary 카드에 LLM 요약, top_result, more_url 이 모두 들어가야 한다."""
+    fake_results = [
+        _make_result("채용", 1),
+        _make_result("채용", 2),
+    ]
+
+    async def fake_fetch(
+        query: str, *, list_count: int = 20
+    ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+        return fake_results, ["연관1"], ["대분류 > 중분류 > 직종A"]
+
+    async def fake_summarize(
+        query: str, category: str, selected: list[dict[str, Any]]
+    ) -> str:
+        return "테스트 요약입니다."
+
+    monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
+    monkeypatch.setattr(wss, "_summarize_for_category", fake_summarize)
+
+    graph = build_ai_search_summary()
+    result = await graph.ainvoke({"messages": [HumanMessage(content="서울 카페")]})
+
+    payload = json.loads(result["messages"][-1].content)
+    assert payload["query"] == "서울 카페"
+    assert payload["related_queries"] == ["연관1"]
+    assert payload["related_jobs"] == ["대분류 > 중분류 > 직종A"]
+
+    [card] = payload["categories"]
+    assert card["category"] == "채용"
+    assert card["type"] == "summary"
+    assert card["summary"] == "테스트 요약입니다."
+    assert card["top_result"] == {
+        "title": "채용-1",
+        "url": "https://example.com/채용/1",
+    }
+    assert card["result_count"] == 2
+    assert "topQuerySearchArea=workinfo" in card["more_url"]
+
     meta = payload["meta"]
-    assert meta["ranking"] == ["채용", "정책", "훈련"]
-    assert meta["result_count"] == len(fake_results)
+    assert meta["result_count_total"] == 2
+    assert meta["result_count_by_category"] == {"채용": 2}
     assert isinstance(meta["fetched_at"], str)
     assert meta["fetched_at"].endswith("+00:00")
 
@@ -396,13 +493,13 @@ async def test_preset_e2e_returns_json_ai_message(
 async def test_preset_e2e_handles_empty_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """빈 query여도 그래프가 깨지지 않고 빈 payload를 반환해야 한다."""
+    """빈 query 여도 그래프가 깨지지 않고 빈 payload 를 반환해야 한다."""
 
-    # fetch / llm은 호출되지 않아야 하지만 안전하게 stub해둔다.
+    # fetch 는 호출되지 않아야 하지만 안전하게 stub 해둔다.
     async def fake_fetch(
         query: str, *, list_count: int = 20
     ) -> tuple[list[dict[str, Any]], list[str], list[str]]:
-        raise AssertionError("빈 query에서는 fetch가 호출되면 안 된다")
+        raise AssertionError("빈 query 에서는 fetch 가 호출되면 안 된다")
 
     monkeypatch.setattr(wss, "fetch_work24_search", fake_fetch)
 
@@ -418,13 +515,11 @@ async def test_preset_e2e_handles_empty_query(
     assert fetched_at.endswith("+00:00")
     assert payload == {
         "query": "",
-        "summary": "",
-        "primary": {"category": "", "url": "", "title": ""},
-        "related_categories": [],
+        "categories": [],
         "related_queries": [],
         "related_jobs": [],
         "meta": {
-            "ranking": [],
-            "result_count": 0,
+            "result_count_total": 0,
+            "result_count_by_category": {},
         },
     }

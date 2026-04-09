@@ -17,10 +17,12 @@ HTML 스크래핑으로 결과를 가져옵니다. 공식 API 가 제공되면 �
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import json
 import logging
 import os
+import urllib.parse
 from functools import lru_cache
 from typing import Any
 
@@ -29,7 +31,6 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, Field
 
 from agents.state import State
 
@@ -189,10 +190,12 @@ def _summary_input_count() -> int:
     )
 
 
-# 고용24 통합검색의 9개 결과 카테고리.
-# work24의 "전체" 탭은 이들을 한 화면에 모은 필터일 뿐 별도 결과 섹션이 아니므로
-# ranking 후보에서 제외한다 (포함하면 LLM이 의미 없는 안전선택으로 늘 1순위로 잡음).
-_ALL_CATEGORIES: list[str] = [
+# 고용24 통합검색의 9개 결과 카테고리. work24의 "전체" 탭은 이들을 한 화면에 모은
+# 필터일 뿐 별도 결과 섹션이 아니므로 여기서는 제외한다.
+#
+# 이 리스트의 순서가 곧 응답에서 카드가 노출되는 고정 순서이며, work24 사이트
+# 통합검색 결과 페이지의 탭 순서(왼쪽 → 오른쪽)와 동일하게 맞췄다.
+_CATEGORY_DISPLAY_ORDER: list[str] = [
     "신고·신청",
     "정책",
     "채용",
@@ -204,33 +207,57 @@ _ALL_CATEGORIES: list[str] = [
     "기타",
 ]
 
-# 분류 LLM 실패 시 사용할 중립 기본 우선순위.
-_DEFAULT_CATEGORY_RANKING: list[str] = list(_ALL_CATEGORIES)
+# 요약 카드를 생성할 카테고리 집합. 여기에 포함되지 않은 카테고리는 응답의
+# ``categories`` 배열에 아예 포함되지 않는다 (건수는 ``meta.result_count_by_category``
+# 에서 확인 가능).
+#
+# 요약 대상이 아닌 카테고리를 제외하는 이유:
+#   - 신고·신청: 양식 파일명/메뉴 경로만 있어 LLM 요약이 무의미
+#   - 기업: 기업명/주소만 있어 요약보다 리스트가 자연스러우나,
+#     work24 가 이미 보여주므로 중복
+#   - 자격: 자격증명만 있고 work24 키워드 매칭 품질이 낮아 노이즈
+#   - 기타: catch-all, 콘텐츠 종류가 통일되지 않아 요약 부적합
+#
+# 각 카테고리별 판정 근거는 README.md 의 "카테고리별 응답 type" 섹션 참고.
+_SUMMARY_CATEGORIES: frozenset[str] = frozenset({
+    "정책",
+    "채용",
+    "훈련",
+    "뉴스·자료",
+    "직업·진로",
+})
 
-_INTENT_SYSTEM_PROMPT = (
-    "당신은 고용24(work24.go.kr) 통합검색의 의도 분류 어시스턴트입니다. "
-    "사용자의 검색어를 보고, 어떤 카테고리의 결과가 가장 핵심인지 우선순위를 매기세요. "
-    f"카테고리 후보: {', '.join(_ALL_CATEGORIES)}. "
-    "반드시 모든 카테고리를 정확히 한 번씩 우선순위 순서대로 나열하세요."
-)
+# 카테고리별 work24 통합검색 URL 의 ``topQuerySearchArea`` 파라미터 값.
+# more_url 생성에 사용한다.
+_CATEGORY_SEARCH_AREA: dict[str, str] = {
+    "신고·신청": "report",
+    "정책": "policy",
+    "채용": "workinfo",
+    "기업": "bizinfo",
+    "훈련": "training",
+    "뉴스·자료": "news",
+    "직업·진로": "jobCourse",
+    "자격": "qual",
+    "기타": "etc",
+}
 
-_SUMMARY_SYSTEM_PROMPT = (
-    "당신은 고용24 검색 결과 요약 어시스턴트입니다. "
-    "사용자의 질의와 검색 결과(JSON)를 받아 한국어로 2~3줄 요약을 생성합니다. "
-    "규칙: "
-    "(1) 핵심 정보만 담을 것, "
-    "(2) 과장·추측 금지, 제공된 결과에 근거할 것, "
-    "(3) 2~3개 문장으로 총 길이는 200자 이내, "
-    "(4) 마크다운/특수문자 없이 평문으로."
-)
+def _summary_system_prompt(category: str) -> str:
+    """카테고리 인지형 요약 시스템 프롬프트.
 
-
-class _IntentResult(BaseModel):
-    """의도 분류 LLM의 구조화된 출력."""
-
-    category_ranking: list[str] = Field(
-        ...,
-        description="카테고리 우선순위 (중복 없이 모든 카테고리를 포함).",
+    Phase 1 에서는 모든 summary type 카테고리가 동일한 템플릿을 공유하되,
+    카테고리 이름만 주입해서 LLM 이 그 카테고리에 맞는 톤/강조점을 자체적으로
+    조정하도록 한다. Phase 2/3 에서 카테고리별로 분화된 프롬프트로 교체할 예정.
+    """
+    return (
+        "당신은 고용24(work24.go.kr) 검색 결과 요약 어시스턴트입니다. "
+        f"이번 결과는 '{category}' 카테고리에 속합니다. "
+        "사용자의 질의와 검색 결과(JSON)를 받아 한국어로 2~3줄 요약을 생성합니다. "
+        f"'{category}' 카테고리에서 사용자가 가장 알고 싶을 만한 핵심 정보를 우선적으로 다루세요. "
+        "규칙: "
+        "(1) 핵심 정보만 담을 것, "
+        "(2) 과장·추측 금지, 제공된 결과에 근거할 것, "
+        "(3) 2~3개 문장으로 총 길이는 200자 이내, "
+        "(4) 마크다운/특수문자 없이 평문으로."
     )
 
 
@@ -359,6 +386,44 @@ def _parse_li(li: Tag, category: str) -> dict[str, Any] | None:
     }
 
 
+def _parse_report_section(section: Tag, category: str) -> list[dict[str, Any]]:
+    """신고·신청 카테고리 전용 파서.
+
+    신고·신청 섹션은 다른 카테고리와 HTML 구조가 다릅니다:
+    - ``ul.srch_list_default > li`` 가 1개뿐이고
+    - 그 안에 ``div.box_border_type`` 서브섹션들(개인/기업)이 들어 있고
+    - 각 서브섹션 안에 ``p.b1_r`` 로 메뉴 경로가 나열됩니다.
+
+    일반 파서(``_parse_li``)로는 1건만 나오므로 별도로 처리합니다.
+    """
+    items: list[dict[str, Any]] = []
+    for box in section.select("div.box_border_type"):
+        # 서브섹션 라벨 (예: "- 개인", "- 기업")
+        label_span = box.select_one("span.b1_sb")
+        sub_label = ""
+        if label_span:
+            sub_label = " ".join(label_span.get_text(" ", strip=True).split())
+            sub_label = sub_label.lstrip("- ").strip()
+
+        for p in box.select("p.b1_r"):
+            title = " ".join(p.get_text(" ", strip=True).split())
+            if not title or _is_placeholder_title(title):
+                continue
+            # p 안에 <a> 가 있으면 URL 추출, 없으면 빈 문자열
+            url = ""
+            a_tag = p.find("a", href=True)
+            if a_tag and _is_meaningful_href(a_tag.get("href", "")):
+                url = _absolutize(a_tag["href"])
+            items.append({
+                "title": title,
+                "snippet": sub_label,
+                "url": url,
+                "category": category,
+                "meta": {"sub_section": sub_label} if sub_label else {},
+            })
+    return items
+
+
 def _parse_related_queries(soup: BeautifulSoup) -> list[str]:
     """``form_keyword1`` 탭의 ``_btn_recommend`` 버튼에서 연관검색어를 추출합니다."""
     container = soup.find("div", id="form_keyword1")
@@ -425,6 +490,12 @@ def _parse_work24_html(
         section = header.find_next_sibling("div", class_="result_view")
         if not isinstance(section, Tag):
             continue
+
+        # 신고·신청 카테고리는 HTML 구조가 다르므로 전용 파서 사용.
+        if category == "신고·신청":
+            results.extend(_parse_report_section(section, category))
+            continue
+
         ul = section.select_one("ul.srch_list_default")
         if not isinstance(ul, Tag):
             continue
@@ -452,8 +523,12 @@ async def fetch_work24_search(
     실패 시 빈 리스트 + 경고 로그 (요약 파이프라인이 멈추지 않게).
 
     work24의 통합검색 페이지는 카테고리별로 별도의 정렬 옵션 파라미터를 받는다.
-    브라우저에서 실제로 보내는 파라미터셋을 그대로 흉내내어 사용자가 보는 화면과
-    동일한 결과를 받도록 한다.
+    SVC-3 는 "결과 있는 카테고리만 카드화" 하므로 신고·신청 카테고리도 정확도순
+    (RANK) 으로 가져와야 top-N 이 의미를 가진다. (브라우저 기본은 가나다순(TITLE)
+    이지만, 그 정렬에서는 ㄱ/ㄴ/ㄷ 으로 시작하는 항목이 위로 와서 list 카드가
+    잘못된 신호를 준다.)
+    훈련(trainingSort=DATE) 만 의도적으로 날짜순을 유지하는데, 사용자에게 가치
+    있는 정보가 "최근 등록된/모집 임박" 이기 때문이다.
 
     NOTE: 공식 API가 아니라 공개 페이지의 HTML 스크래핑입니다.
     work24가 API를 제공하면 그쪽으로 교체하는 것을 권장합니다.
@@ -474,7 +549,7 @@ async def fetch_work24_search(
         "excludedQuery": "",
         "startCount": "1",
         "listCount": str(list_count),
-        "reportSort": "TITLE",
+        "reportSort": "RANK",
         "workinfoSort": "RANK",
         "residentSort": "RANK",
         "policySort": "RANK",
@@ -508,118 +583,80 @@ async def fetch_work24_search(
     return _parse_work24_html(html)
 
 
-# ── 결정론 헬퍼 ─────────────────────────────────────────────────
+# ── 카드 빌더 (결정론 헬퍼) ─────────────────────────────────────
 
 
-def _select_top_k_by_category(
+def _group_by_category(
     results: list[dict[str, Any]],
-    ranking: list[str],
-    *,
-    k: int = 5,
-) -> list[dict[str, Any]]:
-    """카테고리 우선순위에 따라 결과를 정렬한 뒤 상위 k개를 반환합니다.
-
-    같은 카테고리 내에서는 입력 순서를 유지합니다(stable sort).
-    ranking에 없는 카테고리는 맨 뒤로 밀립니다.
-    """
-    rank_index = {cat: idx for idx, cat in enumerate(ranking)}
-    fallback = len(ranking)
-    sorted_results = sorted(
-        results,
-        key=lambda r: rank_index.get(r.get("category", ""), fallback),
-    )
-    return sorted_results[:k]
-
-
-_EMPTY_NAVIGATION_ITEM: dict[str, Any] = {"category": "", "url": "", "title": ""}
-
-
-def _build_navigation(
-    results: list[dict[str, Any]],
-    ranking: list[str],
-    related_queries: list[str],
-    related_jobs: list[str],
-) -> dict[str, Any]:
-    """navigation dict 구성.
-
-    primary 와 related_categories 는 모두 ``{category, url, title}`` 형태로
-    동일한 모양을 가진다 (UI 가 같은 카드 컴포넌트로 처리할 수 있도록).
-
-    - primary: 1순위 카테고리의 첫 번째 결과
-    - related_categories: 2·3순위 카테고리에서 각 1개씩
-    - related_queries: 연관검색어 (최대 5개)
-    - related_jobs: 연관직종 (최대 2개)
-    """
-    by_category: dict[str, list[dict[str, Any]]] = {}
+) -> dict[str, list[dict[str, Any]]]:
+    """결과 리스트를 카테고리별 dict 로 그룹화합니다 (입력 순서 유지)."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
     for r in results:
-        by_category.setdefault(r.get("category", ""), []).append(r)
+        cat = r.get("category", "")
+        if not cat:
+            continue
+        grouped.setdefault(cat, []).append(r)
+    return grouped
 
-    def _card(category: str) -> dict[str, Any] | None:
-        items = by_category.get(category, [])
-        if not items:
-            return None
-        item = items[0]
-        return {
-            "category": category,
-            "url": item.get("url", ""),
-            "title": item.get("title", ""),
-        }
 
-    primary: dict[str, Any] = dict(_EMPTY_NAVIGATION_ITEM)
-    if ranking:
-        top = _card(ranking[0])
-        if top:
-            primary = top
+def _build_more_url(category: str, query: str) -> str:
+    """카테고리별 work24 통합검색 결과 페이지의 deep link 를 생성합니다.
 
-    related_categories: list[dict[str, Any]] = []
-    for cat in ranking[1:3]:
-        card = _card(cat)
-        if card:
-            related_categories.append(card)
+    work24 의 ``selectUnifySearch.do`` URL 은 ``topQueryData`` 를 이중 URL
+    인코딩으로 받습니다 (예: '고용' → '%25EA%25B3%25A0%25EC%259A%25A9').
+    그래서 ``quote`` 를 두 번 호출합니다.
+    """
+    area = _CATEGORY_SEARCH_AREA.get(category, "")
+    if not area:
+        return ""
+    encoded_query = urllib.parse.quote(urllib.parse.quote(query, safe=""), safe="")
+    return (
+        f"{_WORK24_BASE}{_WORK24_SEARCH_PATH}"
+        f"?topQuerySearchArea={area}"
+        f"&topQueryData={encoded_query}"
+        f"&sortField=rank"
+    )
 
+
+def _build_summary_card(
+    category: str,
+    items: list[dict[str, Any]],
+    summary_text: str,
+    query: str,
+) -> dict[str, Any]:
+    """summary type 카드를 생성합니다.
+
+    LLM 요약 + 1 순위 결과의 title/url + more_url 을 묶어서 반환합니다.
+    """
+    top = items[0] if items else None
     return {
-        "primary": primary,
-        "related_categories": related_categories,
-        "related_queries": related_queries[:5],
-        "related_jobs": related_jobs[:2],
+        "category": category,
+        "type": "summary",
+        "summary": summary_text,
+        "top_result": (
+            {"title": top.get("title", ""), "url": top.get("url", "")}
+            if top
+            else None
+        ),
+        "result_count": len(items),
+        "more_url": _build_more_url(category, query),
     }
+
+
 
 
 # ── LLM 호출 헬퍼 (테스트에서 monkeypatch) ──────────────────────
 
 
-async def _classify_intent(query: str) -> list[str]:
-    """검색어 의도를 분류해 카테고리 우선순위 리스트를 반환합니다.
+async def _summarize_for_category(
+    query: str, category: str, selected: list[dict[str, Any]]
+) -> str:
+    """카테고리별 한국어 2~3줄 요약을 생성합니다.
 
-    LLM 호출이 실패하면 ``_DEFAULT_CATEGORY_RANKING`` 을 반환합니다. 단,
-    ``LLM_MODEL`` 환경변수 형식이 잘못된 ``_InvalidModelIdError`` 는 운영자가
-    즉시 인지해야 하는 설정 오류이므로 fallback 하지 않고 그대로 raise 합니다.
-    """
-    model = _model_id()  # _InvalidModelIdError 는 여기서 raise (fallback 안 함)
-    try:
-        llm = init_chat_model(model).with_structured_output(_IntentResult)
-        result = await llm.ainvoke(
-            [
-                SystemMessage(content=_INTENT_SYSTEM_PROMPT),
-                HumanMessage(content=query),
-            ]
-        )
-        ranking = list(result.category_ranking) if result else []
-        # 누락된 카테고리 보정 (LLM이 일부를 빼먹는 경우).
-        seen = set(ranking)
-        for cat in _ALL_CATEGORIES:
-            if cat not in seen:
-                ranking.append(cat)
-        return ranking
-    except Exception:
-        _log.exception("intent classification failed; using default ranking")
-        return list(_DEFAULT_CATEGORY_RANKING)
+    카테고리 인지형 시스템 프롬프트를 사용하여 LLM 이 해당 카테고리에 맞는
+    톤/강조점을 스스로 조정하도록 합니다.
 
-
-async def _summarize(query: str, selected: list[dict[str, Any]]) -> str:
-    """선별된 결과로 한국어 2~3줄 요약을 생성합니다.
-
-    LLM 호출이 실패하면 top-1 결과의 title을 fallback으로 반환합니다. 단,
+    LLM 호출이 실패하면 top-1 결과의 title 을 fallback 으로 반환합니다. 단,
     ``LLM_MODEL`` 환경변수 형식이 잘못된 ``_InvalidModelIdError`` 는 설정 오류
     이므로 fallback 하지 않고 그대로 raise 합니다.
     """
@@ -629,14 +666,17 @@ async def _summarize(query: str, selected: list[dict[str, Any]]) -> str:
         payload = json.dumps(selected, ensure_ascii=False)
         result = await llm.ainvoke(
             [
-                SystemMessage(content=_SUMMARY_SYSTEM_PROMPT),
+                SystemMessage(content=_summary_system_prompt(category)),
                 HumanMessage(content=f"질의: {query}\n검색결과: {payload}"),
             ]
         )
         text = result.content if hasattr(result, "content") else str(result)
         return text.strip() if isinstance(text, str) else str(text)
     except Exception:
-        _log.exception("summarization failed; using fallback title echo")
+        _log.exception(
+            "summarization failed for category=%s; using fallback title echo",
+            category,
+        )
         if selected:
             return str(selected[0].get("title", ""))
         return ""
@@ -659,25 +699,78 @@ def _now_iso() -> str:
     return datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds")
 
 
-async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
-    """SVC-3 worker — 고용24 검색 결과를 한국어 2~3줄로 요약합니다.
+async def _build_category_cards(
+    query: str,
+    by_category: dict[str, list[dict[str, Any]]],
+    summary_input_count: int,
+) -> list[dict[str, Any]]:
+    """요약 가능한 카테고리에 대해서만 카드를 고정 순서로 생성합니다.
 
-    출력은 ``_worker_outputs`` 에 단일 dict로 push되며,
-    ``data["response"]`` 필드에 최종 JSON 문자열이 담깁니다.
-    기존 ``postprocessor`` 가 이를 ``AIMessage.content`` 로 그대로 변환합니다.
+    동작:
+    - ``_CATEGORY_DISPLAY_ORDER`` 순서대로 순회
+    - ``_SUMMARY_CATEGORIES`` 에 포함되지 않은 카테고리는 건너뜀
+      (건수는 ``meta.result_count_by_category`` 에서 확인 가능)
+    - 결과 0건 카테고리도 건너뜀
+    - ``asyncio.gather`` 로 병렬 LLM 호출
+      (검색 1건당 최대 5 회의 요약 호출이 동시에 발생)
+    """
+    summary_inputs: list[tuple[int, str, list[dict[str, Any]]]] = []
+    cards: list[dict[str, Any] | None] = []
+
+    for category in _CATEGORY_DISPLAY_ORDER:
+        if category not in _SUMMARY_CATEGORIES:
+            continue
+        items = by_category.get(category, [])
+        if not items:
+            continue
+
+        selected = items[:summary_input_count]
+        summary_inputs.append((len(cards), category, selected))
+        cards.append(None)  # placeholder
+
+    if summary_inputs:
+        summaries = await asyncio.gather(
+            *(
+                _summarize_for_category(query, category, selected)
+                for _, category, selected in summary_inputs
+            )
+        )
+        for (idx, category, _), summary_text in zip(summary_inputs, summaries):
+            full_items = by_category.get(category, [])
+            cards[idx] = _build_summary_card(
+                category, full_items, summary_text, query
+            )
+
+    return [c for c in cards if c is not None]
+
+
+async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
+    """SVC-3 worker — 고용24 검색 결과를 카테고리별로 카드화합니다.
+
+    동작 흐름:
+
+        query 추출 → work24 검색 (HTTP/HTML)
+            → 카테고리별 그룹화 → 카테고리별 카드 생성 (summary/list/link)
+            → summary 카드는 병렬 LLM 호출 → 응답 payload 직렬화
+
+    출력은 ``_worker_outputs`` 에 단일 dict 로 push 되며, ``data["response"]``
+    필드에 최종 JSON 문자열이 담깁니다. ``postprocessor`` 가 이를
+    ``AIMessage.content`` 로 그대로 변환합니다.
+
+    Phase 1 (현재): 의도 분류 LLM 호출 제거. 모든 카테고리는 work24 의 자체
+    분류를 그대로 신뢰하고, 결과 있는 카테고리만 카드화한다. 자세한 설계
+    배경은 README.md 의 "카테고리별 응답 type" 섹션 참고.
     """
     query = _extract_query(state)
     if not query:
         empty_payload = {
             "query": "",
-            "summary": "",
-            "primary": dict(_EMPTY_NAVIGATION_ITEM),
-            "related_categories": [],
+            "categories": [],
             "related_queries": [],
             "related_jobs": [],
             "meta": {
-                "ranking": [],
-                "result_count": 0,
+                "result_count_total": 0,
+                "result_count_by_category": {},
                 "fetched_at": _now_iso(),
             },
         }
@@ -695,24 +788,22 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     search_result_count = _search_result_count()
     summary_input_count = _summary_input_count()
 
-    ranking = await _classify_intent(query)
     results, related_queries, related_jobs = await fetch_work24_search(
         query, list_count=search_result_count
     )
-    selected = _select_top_k_by_category(results, ranking, k=summary_input_count)
-    summary = await _summarize(query, selected)
-    navigation = _build_navigation(results, ranking, related_queries, related_jobs)
+    by_category = _group_by_category(results)
+    cards = await _build_category_cards(query, by_category, summary_input_count)
 
     payload = {
         "query": query,
-        "summary": summary,
-        "primary": navigation["primary"],
-        "related_categories": navigation["related_categories"],
-        "related_queries": navigation["related_queries"],
-        "related_jobs": navigation["related_jobs"],
+        "categories": cards,
+        "related_queries": related_queries[:5],
+        "related_jobs": related_jobs[:2],
         "meta": {
-            "ranking": ranking,
-            "result_count": len(results),
+            "result_count_total": len(results),
+            "result_count_by_category": {
+                cat: len(items) for cat, items in by_category.items()
+            },
             "fetched_at": _now_iso(),
         },
     }
