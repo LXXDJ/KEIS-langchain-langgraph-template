@@ -241,23 +241,48 @@ _CATEGORY_SEARCH_AREA: dict[str, str] = {
     "기타": "etc",
 }
 
-def _summary_system_prompt(category: str) -> str:
-    """카테고리 인지형 요약 시스템 프롬프트.
+# 카테고리별 전용 시스템 프롬프트.
+# 공통 규칙은 _SUMMARY_RULES 로 분리하고, 카테고리별 강조점만 달리한다.
+_SUMMARY_RULES = (
+    "규칙: "
+    "(1) 핵심 정보만 담을 것, "
+    "(2) 과장·추측 금지, 제공된 결과에 근거할 것, "
+    "(3) 2~3개 문장으로 총 길이는 200자 이내, "
+    "(4) 마크다운/특수문자 없이 평문으로."
+)
 
-    Phase 1 에서는 모든 summary type 카테고리가 동일한 템플릿을 공유하되,
-    카테고리 이름만 주입해서 LLM 이 그 카테고리에 맞는 톤/강조점을 자체적으로
-    조정하도록 한다. Phase 2/3 에서 카테고리별로 분화된 프롬프트로 교체할 예정.
-    """
+_CATEGORY_PROMPTS: dict[str, str] = {
+    "채용": (
+        "당신은 고용24 채용공고 요약 어시스턴트입니다. "
+        "검색 결과 JSON 의 meta 필드에 회사명(company), 고용형태(employment_type), "
+        "경력(experience), 임금(salary), 근무지(location), 마감(deadline_badge/deadline_date) "
+        "정보가 포함되어 있습니다. "
+        "요약에 반드시 포함할 것: (a) 채용 건수, (b) 대표 직무/채용 분야, "
+        "(c) 지역 분포, (d) 마감 임박 건수(D-7 이내). "
+        + _SUMMARY_RULES
+    ),
+    "훈련": (
+        "당신은 고용24 직업훈련 요약 어시스턴트입니다. "
+        "검색 결과 JSON 의 meta 필드에 기관명(institution), 훈련기간(period), "
+        "훈련비용(cost), 자기부담금(self_payment), NCS직종/취업률(ncs_employment_rate) "
+        "정보가 포함되어 있습니다. "
+        "요약에 반드시 포함할 것: (a) 과정 수, (b) 국비지원(자기부담금 0) vs 유료 비율, "
+        "(c) 주요 과정 분야, (d) 평균적인 훈련기간. "
+        + _SUMMARY_RULES
+    ),
+}
+
+
+def _summary_system_prompt(category: str) -> str:
+    """카테고리별 전용 프롬프트가 있으면 사용, 없으면 generic 프롬프트."""
+    if category in _CATEGORY_PROMPTS:
+        return _CATEGORY_PROMPTS[category]
     return (
         "당신은 고용24(work24.go.kr) 검색 결과 요약 어시스턴트입니다. "
         f"이번 결과는 '{category}' 카테고리에 속합니다. "
         "사용자의 질의와 검색 결과(JSON)를 받아 한국어로 2~3줄 요약을 생성합니다. "
         f"'{category}' 카테고리에서 사용자가 가장 알고 싶을 만한 핵심 정보를 우선적으로 다루세요. "
-        "규칙: "
-        "(1) 핵심 정보만 담을 것, "
-        "(2) 과장·추측 금지, 제공된 결과에 근거할 것, "
-        "(3) 2~3개 문장으로 총 길이는 200자 이내, "
-        "(4) 마크다운/특수문자 없이 평문으로."
+        + _SUMMARY_RULES
     )
 
 
@@ -365,6 +390,193 @@ def _is_placeholder_title(title: str) -> bool:
     # 숫자 + 단위만 있는 경우 (예: "0", "9", "62,370")
     bare = title.replace(",", "").replace(".", "").strip()
     return bare.isdigit()
+
+
+def _parse_recruit_li(li: Tag) -> dict[str, Any] | None:
+    """채용 카테고리 전용 파서.
+
+    채용 li 에서 추출하는 필드:
+    - company: dt 에서 a 태그 텍스트를 제외한 나머지
+    - title: dd 의 전체 텍스트에서 D-day/마감일 뱃지를 제외한 공고 제목
+    - deadline_badge: ``span.tbl_label.gray`` 의 텍스트 (예: "D-8")
+    - deadline_date: ``span.s1_r`` 의 텍스트 (예: "(2026.04.17 마감)")
+    - employment_type / experience / education / salary / location: vline_group 의
+      span.item 들 (순서 기반)
+    """
+    dl = li.find("dl", class_="dl_list")
+    if not dl:
+        return None
+
+    # 회사명 + 제목
+    dt = dl.find("dt")
+    dd = dl.find("dd")
+    if not dt or not dd:
+        return None
+
+    dt_a = dt.find("a")
+    full_dt = " ".join(dt.get_text(" ", strip=True).split())
+    a_text = " ".join(dt_a.get_text(" ", strip=True).split()) if dt_a else ""
+    company = full_dt.replace(a_text, "").strip() if a_text else full_dt
+
+    url = ""
+    if dt_a and _is_meaningful_href(dt_a.get("href", "")):
+        url = _absolutize(dt_a["href"])
+
+    # dd 에서 공고 제목 + 마감 뱃지
+    dd_text = " ".join(dd.get_text(" ", strip=True).split())
+    deadline_badge = ""
+    deadline_date = ""
+    for span in dd.find_all("span"):
+        cls = span.get("class", [])
+        text = span.get_text(strip=True)
+        if "tbl_label" in cls:
+            deadline_badge = text  # "D-8"
+        elif "s1_r" in cls:
+            deadline_date = text  # "(2026.04.17 마감)"
+
+    # vline_group 의 span.item 들
+    vline_groups = li.select("div.vline_group")
+    items: list[str] = []
+    for vg in vline_groups:
+        for span in vg.find_all("span", class_="item"):
+            items.append(" ".join(span.get_text(" ", strip=True).split()))
+
+    # 순서 기반 매핑 (첫 번째 vline_group: 고용형태, 경력, 학력, 임금, 근무지, 제공처)
+    employment_type = items[0] if len(items) > 0 else ""
+    experience = items[1] if len(items) > 1 else ""
+    education = items[2] if len(items) > 2 else ""
+    salary = items[3] if len(items) > 3 else ""
+    location = items[4] if len(items) > 4 else ""
+
+    title = dd_text
+    # 뱃지 텍스트를 제거해서 순수 제목만 남김
+    for badge_text in [deadline_badge, deadline_date]:
+        if badge_text:
+            title = title.replace(badge_text, "")
+    title = " ".join(title.split()).strip()
+
+    if not url and not title:
+        return None
+
+    return {
+        "title": title,
+        "snippet": "",
+        "url": url,
+        "category": "채용",
+        "meta": {
+            "company": company,
+            "employment_type": employment_type,
+            "experience": experience,
+            "education": education,
+            "salary": salary,
+            "location": location,
+            "deadline_badge": deadline_badge,
+            "deadline_date": deadline_date,
+        },
+    }
+
+
+def _parse_training_li(li: Tag) -> dict[str, Any] | None:
+    """훈련 카테고리 전용 파서.
+
+    훈련 li 에서 추출하는 필드:
+    - institution: dt 에서 a 태그 텍스트를 제외한 나머지 (기관명)
+    - title: dd 의 첫 텍스트 라인 (과정명)
+    - period / hours / ncs_employment_rate: vline_group 의 span.item 중 라벨 매칭
+    - cost / self_payment: div.price 텍스트
+    """
+    dl = li.find("dl", class_="dl_list")
+    if not dl:
+        return None
+
+    dt = dl.find("dt")
+    dd = dl.find("dd")
+    if not dt or not dd:
+        return None
+
+    # 기관명
+    dt_a = dt.find("a")
+    full_dt = " ".join(dt.get_text(" ", strip=True).split())
+    a_text = " ".join(dt_a.get_text(" ", strip=True).split()) if dt_a else ""
+    institution = full_dt.replace(a_text, "").strip() if a_text else full_dt
+    # "과정 바로가기" 같은 뱃지 텍스트 제거
+    for badge_text in ["과정 바로가기", "국민내일배움카드"]:
+        institution = institution.replace(badge_text, "").strip()
+
+    url = ""
+    if dt_a and _is_meaningful_href(dt_a.get("href", "")):
+        url = _absolutize(dt_a["href"])
+
+    # 과정명 — dd 의 직접 텍스트 자식만 (vline_group 등 하위 태그 내용 제외)
+    from bs4.element import NavigableString
+    direct_parts: list[str] = []
+    for child in dd.children:
+        if isinstance(child, NavigableString):
+            t = child.strip()
+            if t:
+                direct_parts.append(t)
+        elif isinstance(child, Tag) and child.name in ("a", "strong", "em", "span"):
+            if "vline_group" not in child.get("class", []):
+                t = child.get_text(" ", strip=True)
+                if t:
+                    direct_parts.append(t)
+    title = " ".join(" ".join(direct_parts).split()) if direct_parts else ""
+
+    # vline_group span.item 들에서 라벨 기반 추출
+    period = ""
+    hours = ""
+    ncs_employment_rate = ""
+    training_type = ""
+    for span in li.select("div.vline_group span.item"):
+        text = " ".join(span.get_text(" ", strip=True).split())
+        if not text:
+            continue
+        if "훈련기간" in text or "기간" in text:
+            period = text.replace("훈련기간 :", "").replace("훈련기간:", "").strip()
+        elif "훈련시간" in text or "시간" in text:
+            hours = text.replace("훈련시간 :", "").replace("훈련시간:", "").strip()
+        elif "NCS" in text or "취업률" in text:
+            ncs_employment_rate = text
+        elif "훈련" in text and len(text) < 10:
+            training_type = text  # "원격훈련", "집체훈련" 등
+
+    # 비용 (div.price)
+    cost = ""
+    self_payment = ""
+    price_div = li.select_one("div.price")
+    if price_div:
+        price_text = " ".join(price_div.get_text(" ", strip=True).split())
+        # "68,310 원 자부 0" 또는 "95,040 원 자부 23,910" 패턴
+        cost = price_text
+        import re
+        # 첫 번째 숫자 = 훈련비, "자부" 뒤의 숫자 = 자기부담금
+        cost_match = re.match(r"([\d,]+)", price_text.replace(" ", ""))
+        if cost_match:
+            cost = cost_match.group(1)
+        self_match = re.search(r"자부?\s*([\d,]+)", price_text)
+        if not self_match:
+            self_match = re.search(r"원\s*([\d,]+)", price_text)
+        if self_match:
+            self_payment = self_match.group(1)
+
+    if not url and not title:
+        return None
+
+    return {
+        "title": title,
+        "snippet": "",
+        "url": url,
+        "category": "훈련",
+        "meta": {
+            "institution": institution,
+            "training_type": training_type,
+            "period": period,
+            "hours": hours,
+            "cost": cost,
+            "self_payment": self_payment,
+            "ncs_employment_rate": ncs_employment_rate,
+        },
+    }
 
 
 def _parse_li(li: Tag, category: str) -> dict[str, Any] | None:
@@ -491,7 +703,7 @@ def _parse_work24_html(
         if not isinstance(section, Tag):
             continue
 
-        # 신고·신청 카테고리는 HTML 구조가 다르므로 전용 파서 사용.
+        # 카테고리별 전용 파서가 있으면 사용, 없으면 범용 _parse_li.
         if category == "신고·신청":
             results.extend(_parse_report_section(section, category))
             continue
@@ -501,7 +713,12 @@ def _parse_work24_html(
             continue
 
         for li in ul.find_all("li", recursive=False):
-            parsed = _parse_li(li, category)
+            if category == "채용":
+                parsed = _parse_recruit_li(li)
+            elif category == "훈련":
+                parsed = _parse_training_li(li)
+            else:
+                parsed = _parse_li(li, category)
             if parsed is not None:
                 results.append(parsed)
 
