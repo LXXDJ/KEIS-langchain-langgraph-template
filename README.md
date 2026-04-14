@@ -406,13 +406,6 @@ state["messages"] (입력)
    json.dumps(...) → _worker_outputs 에 push
 ```
 
-**의도 분류 LLM 호출이 사라진 점**에 주목하세요. 이전 (Phase 0) 에서는 LLM 이 카테고리
-우선순위를 매기고 그 1순위 카테고리만 카드화했는데, 명확한 쿼리("클라우드 서비스 관련
-정책")는 정확히 답하면서 모호한 쿼리("ai")에서는 카드가 비는 문제가 있었습니다.
-Phase 1 부터는 work24 의 자체 분류를 그대로 신뢰하고, 결과가 있는 모든 카테고리를
-카드화하여 두 케이스를 동시에 해결합니다. 자세한 결정 배경은 위 [카테고리별 응답 type](#카테고리별-응답-type)
-섹션 참고.
-
 각 단계의 자세한 코드 위치는 다음 섹션에서 설명합니다.
 
 ## 각 노드 상세
@@ -472,14 +465,10 @@ async def worker_search_summary(state: State, **kwargs: Any) -> dict[str, Any]:
     }
 ```
 
-함수 본체는 **얇고**, 실제 일은 모듈 레벨 헬퍼 함수들이 합니다. 각 헬퍼는 단일 책임을
-가지며 단위 테스트도 헬퍼 단위로 작성됩니다.
-
-> **Phase 0 → Phase 1 변경**: 이 섹션은 이전에 `_classify_intent` (LLM 의도 분류) 를
-> 첫 단계로 설명했지만, Phase 1 부터 의도 분류 자체를 제거했습니다. 결과 있는 모든
-> 카테고리를 카드화하므로 더 이상 우선순위 산출이 필요 없고, LLM 호출 1회를 절약하면서
-> 모호한 쿼리에서 카드가 비는 문제도 함께 해결됩니다. 자세한 결정 배경은 위 [카테고리별
-> 응답 type](#카테고리별-응답-type) 섹션 참고.
+`worker_search_summary()` 함수 자체는 헬퍼 함수들을 순서대로 호출만 하고,
+실제 일(HTML 파싱, LLM 호출, 카드 생성 등)은 `_parse_work24_html`,
+`_summarize_for_category`, `_build_summary_card` 같은 별도 함수들이 담당합니다.
+테스트할 때도 전체를 돌리지 않고 헬퍼 함수 단위로 독립적으로 검증합니다.
 
 #### ① work24 검색 호출 — `fetch_work24_search` ([worker_search_summary.py](src/agents/nodes/worker_search_summary.py))
 
@@ -488,18 +477,18 @@ work24 통합검색 페이지를 그대로 GET 해서 HTML 을 받고 `_parse_wo
 ```python
 async def fetch_work24_search(
     query: str, *, list_count: int = _DEFAULT_SEARCH_RESULT_COUNT,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+) -> list[dict[str, Any]]:
     if not query:
-        return [], [], []
+        return []
 
     params = {
         "topQuerySearchArea": "all",
         "topQueryData": query,
         ...
         "listCount": str(list_count),
-        "reportSort": "RANK",       # ⬅ Phase 1 에서 TITLE → RANK 변경
+        "reportSort": "RANK",       # 신고·신청도 정확도순 (기본은 가나다순)
         "workinfoSort": "RANK",
-        "trainingSort": "DATE",     # ⬅ 의도적으로 DATE 유지 (모집 임박 우선)
+        "trainingSort": "DATE",     # 훈련만 날짜순 유지 (모집 임박 우선)
         ...
     }
     headers = {"User-Agent": _WORK24_USER_AGENT}
@@ -516,7 +505,7 @@ async def fetch_work24_search(
             html = response.text
     except httpx.HTTPError:
         _log.exception("work24 fetch failed for query=%r", query)
-        return [], [], []
+        return []
     ...
     return _parse_work24_html(html)
 ```
@@ -550,16 +539,14 @@ async def fetch_work24_search(
 BeautifulSoup 으로 work24 의 결과 HTML 을 정규화된 dict 리스트로 변환합니다.
 
 ```python
-def _parse_work24_html(
-    html: str,
-) -> tuple[list[dict[str, Any]], list[str], list[str]]:
+def _parse_work24_html(html: str) -> list[dict[str, Any]]:
     if not html:
-        return [], [], []
+        return []
     try:
         soup = BeautifulSoup(html, "html.parser")
     except Exception:
         _log.exception("BeautifulSoup parsing failed")
-        return [], [], []
+        return []
 
     results: list[dict[str, Any]] = []
     for stit in soup.select("div.stit_area"):
@@ -569,11 +556,21 @@ def _parse_work24_html(
         category = " ".join(cat_span.get_text(" ", strip=True).split())
         ...
         section = header.find_next_sibling("div", class_="result_view")
-        ul = section.select_one("ul.srch_list_default")
-        for li in ul.find_all("li", recursive=False):
+
+        # 카테고리별 전용 파서가 있으면 사용, 없으면 범용 _parse_li
+        if category == "신고·신청":
+            results.extend(_parse_report_section(section, category))
+        elif category == "채용":
+            parsed = _parse_recruit_li(li)
+        elif category == "훈련":
+            parsed = _parse_training_li(li)
+        elif category == "정책":
+            parsed = _parse_policy_li(li)
+        elif category in ("뉴스·자료", "직업·진로"):
+            parsed = _parse_news_li(li, category)
+        else:
             parsed = _parse_li(li, category)
-            if parsed is not None:
-                results.append(parsed)
+        ...
 
     return results
 ```
@@ -636,7 +633,7 @@ async def _build_category_cards(
         ))
         for (idx, category, _), summary_text in zip(summary_inputs, summaries):
             full_items = by_category.get(category, [])
-            cards[idx] = _build_summary_card(category, full_items, summary_text, query)
+            cards[idx] = _build_summary_card(category, full_items, summary_text)
 
     return [c for c in cards if c is not None]
 ```
@@ -657,43 +654,34 @@ async def _build_category_cards(
 #### ⑤ 카테고리별 요약 — `_summarize_for_category`
 
 선별된 결과(`SUMMARY_INPUT_COUNT` 건, 기본 5)를 JSON 으로 직렬화해서 GPT-4o mini 에
-넘기고 한국어 2~3줄을 받습니다. Phase 1 에서는 모든 summary 카테고리가 같은 템플릿
-프롬프트를 공유하지만, **카테고리 이름은 시스템 프롬프트에 주입**되므로 LLM 이 톤과
-강조점을 자체적으로 카테고리에 맞게 조정합니다.
+넘기고 한국어 2~3줄을 받습니다. 5개 카테고리 모두 **전용 프롬프트**가 있으며,
+`_CATEGORY_PROMPTS` dict 에서 카테고리별로 다른 시스템 프롬프트를 사용합니다.
 
 ```python
+# 공통 규칙 (모든 카테고리가 공유)
+_SUMMARY_RULES = (
+    "규칙: (1) 핵심 정보만 담을 것, (2) 과장·추측 금지, 제공된 결과에 근거할 것, "
+    "(3) 2~3개 문장으로 총 길이는 200자 이내, (4) 마크다운/특수문자 없이 평문으로."
+)
+
+# 카테고리별 전용 프롬프트 (강조점이 다름)
+_CATEGORY_PROMPTS: dict[str, str] = {
+    "채용": "... 채용 건수, 대표 직무, 지역 분포, 마감 임박(D-7) 강조 ..." + _SUMMARY_RULES,
+    "훈련": "... 과정 수, 국비/유료 비율, 주요 분야, 평균 훈련기간 강조 ..." + _SUMMARY_RULES,
+    "정책": "... 정책 건수, 대상자 그룹, 핵심 지원 내용 강조 ..." + _SUMMARY_RULES,
+    "뉴스·자료": "... 자료 수, 주요 주제, 최근 자료 핵심 내용 강조 ..." + _SUMMARY_RULES,
+    "직업·진로": "... 자료 수, 주요 주제, 가장 관련성 높은 자료 강조 ..." + _SUMMARY_RULES,
+}
+
 def _summary_system_prompt(category: str) -> str:
+    """카테고리별 전용 프롬프트가 있으면 사용, 없으면 generic 프롬프트."""
+    if category in _CATEGORY_PROMPTS:
+        return _CATEGORY_PROMPTS[category]
     return (
-        "당신은 고용24(work24.go.kr) 검색 결과 요약 어시스턴트입니다. "
-        f"이번 결과는 '{category}' 카테고리에 속합니다. "
-        "사용자의 질의와 검색 결과(JSON)를 받아 한국어로 2~3줄 요약을 생성합니다. "
-        f"'{category}' 카테고리에서 사용자가 가장 알고 싶을 만한 핵심 정보를 우선적으로 다루세요. "
-        "규칙: (1) 핵심 정보만 담을 것, (2) 과장·추측 금지, 제공된 결과에 근거할 것, "
-        "(3) 2~3개 문장으로 총 길이는 200자 이내, (4) 마크다운/특수문자 없이 평문으로."
+        f"... '{category}' 카테고리에 맞는 핵심 정보를 우선적으로 다루세요. "
+        + _SUMMARY_RULES
     )
-
-async def _summarize_for_category(
-    query: str, category: str, selected: list[dict[str, Any]]
-) -> str:
-    try:
-        llm = init_chat_model(_MODEL_ID)
-        payload = json.dumps(selected, ensure_ascii=False)
-        result = await llm.ainvoke([
-            SystemMessage(content=_summary_system_prompt(category)),
-            HumanMessage(content=f"질의: {query}\n검색결과: {payload}"),
-        ])
-        text = result.content if hasattr(result, "content") else str(result)
-        return text.strip() if isinstance(text, str) else str(text)
-    except Exception:
-        _log.exception("summarization failed for category=%s", category)
-        if selected:
-            return str(selected[0].get("title", ""))
-        return ""
 ```
-
-> Phase 2/3 에서는 이 단일 템플릿이 카테고리별 분화된 프롬프트로 교체될 예정입니다
-> (예: 채용 → "마감 임박 N건 / 대표 직무 / 지역" 강조, 정책 → "대상자 / 신청기간"
-> 강조). Phase 1 응답을 실제로 보면서 어디부터 분화가 가장 가치 있는지 결정합니다.
 
 LLM 호출이 실패하면 top-1 결과의 title 을 그대로 echo 합니다. 사용자에게는 항상
 최소한 무언가 의미 있는 텍스트가 노출됩니다.
@@ -1025,8 +1013,8 @@ OpenSearch / DeepAgents / 미들웨어 / 백엔드 등은 SVC-3 가 사용하지
 
 ## 다음에 누가 이 코드를 확장한다면
 
-- **새 카테고리를 work24 가 추가하면** → `_CATEGORY_DISPLAY_ORDER` /
-  `_CATEGORY_RESPONSE_TYPE` / `_CATEGORY_SEARCH_AREA` 세 dict 에 한 줄씩 추가.
+- **새 카테고리를 work24 가 추가하면** → `_CATEGORY_DISPLAY_ORDER` 에 순서 추가,
+  요약 대상이면 `_SUMMARY_CATEGORIES` 와 `_CATEGORY_PROMPTS` 에도 추가.
   파서는 그대로 두면 됨 (카테고리 이름을 동적으로 인식).
 - **work24 마크업이 변경되면** → [tests/fixtures/work24_sample.html](tests/fixtures/work24_sample.html)
   을 새로 캡처하고 `_parse_work24_html` 의 셀렉터를 보수.
