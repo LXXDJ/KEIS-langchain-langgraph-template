@@ -1,4 +1,6 @@
-# 고용24 AI 검색 결과 요약 (SVC-3)
+# AI 검색 결과 요약 (SVC-3)
+
+[고용24(work24.go.kr)](https://www.work24.go.kr/cm/main.do) 통합검색 결과를 **AI 요약 제공** 하는 서비스.
 
 ## 목차
 
